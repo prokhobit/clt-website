@@ -516,7 +516,7 @@
 
   function revealTitle() {
     const eyebrow = $('[data-gsap="home-hero-eyebrow"]');
-    const lines = $$('[data-gsap="home-hero-line"]');
+    const lines = $$('[data-gsap="home-hero-line", data-gsap="home-hero-line-2"]');
     const cta = $('[data-gsap="home-hero-cta"]');
     const reveal = $('[data-gsap="home-hero-reveal"]');
     const targets = [eyebrow, ...lines, cta].filter(Boolean);
