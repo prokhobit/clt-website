@@ -288,6 +288,7 @@
   let titleRevealed = false;
   let lastKnownScroll = 0;
   let lastKnownVelocity = 0;
+  let refreshTimer = 0;
 
   const $ = (selector, scope = doc) => scope.querySelector(selector);
   const $$ = (selector, scope = doc) => Array.from(scope.querySelectorAll(selector));
@@ -303,7 +304,26 @@
     return win.scrollY || doc.documentElement.scrollTop || 0;
   }
 
+  function requestRefresh(delay = 80) {
+    win.clearTimeout(refreshTimer);
+    refreshTimer = win.setTimeout(() => ScrollTrigger.refresh(), delay);
+  }
 
+  function refreshWhenLayoutSettles() {
+    requestRefresh(120);
+
+    addEvent(win, "load", () => requestRefresh(60), { once: true });
+
+    if (doc.fonts && doc.fonts.ready) {
+      doc.fonts.ready.then(() => requestRefresh(40)).catch(() => {});
+    }
+
+    Array.from(doc.images || []).forEach((image) => {
+      if (image.complete) return;
+      addEvent(image, "load", () => requestRefresh(40), { once: true });
+      addEvent(image, "error", () => requestRefresh(40), { once: true });
+    });
+  }
 
   /* ── Lenis smooth scroll ─────────────────────────────────── */
 
@@ -322,23 +342,11 @@
     gsap.ticker.add(tick);
     gsap.ticker.lagSmoothing(0);
 
-    ScrollTrigger.scrollerProxy(doc.documentElement, {
-      scrollTop(value) {
-        if (arguments.length) lenis.scrollTo(value, { immediate: true });
-        return lenis.scroll;
-      },
-      getBoundingClientRect() {
-        return { top: 0, left: 0, width: win.innerWidth, height: win.innerHeight };
-      },
-    });
-
     lenis.on("scroll", (event) => {
       lastKnownScroll = typeof event.scroll === "number" ? event.scroll : getScrollY();
       lastKnownVelocity = typeof event.velocity === "number" ? event.velocity : 0;
       ScrollTrigger.update();
     });
-
-    ScrollTrigger.refresh();
 
     mainCtx.add(() => () => {
       gsap.ticker.remove(tick);
@@ -395,6 +403,8 @@
 
       if (pointer < order.length) {
         win.setTimeout(loadBatch, 90);
+      } else {
+        requestRefresh(120);
       }
     }
 
@@ -1362,6 +1372,8 @@
           rotateX: 0,
           duration: 0.58,
           ease: "power2.out",
+          onUpdate: () => requestRefresh(40),
+          onComplete: () => requestRefresh(20),
         });
 
         gsap.to(trigger, { scale: 0.96, opacity: 0.68, duration: 0.25, ease: "power2.out" });
@@ -1374,9 +1386,11 @@
           rotateX: 12,
           duration: 0.35,
           ease: "power2.in",
+          onUpdate: () => requestRefresh(40),
           onComplete() {
             panel.classList.remove("clt-state-open");
             panel.setAttribute("aria-hidden", "true");
+            requestRefresh(20);
           },
         });
 
@@ -1601,6 +1615,7 @@
     initSubscribeDonate();
     initFooter();
     initSmoothAnchors();
+    refreshWhenLayoutSettles();
   }
 
   if (doc.readyState === "loading") {
