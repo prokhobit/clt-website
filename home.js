@@ -979,7 +979,7 @@
   /* ── Explore — infinite draggable carousel ───────────────── */
 
   function initExploreCarousel() {
-    const section = $("#education");
+    const section = $("#explore");
     const track = $("#explore-track");
     const trackMask = $("#explore-mask");
     if (!section || !track || !trackMask) return;
