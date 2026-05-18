@@ -1,6 +1,6 @@
 /* ============================================================
    Commonwealth Lyric Theater — home.js
-   Webflow CDN build: GSAP/ScrollTrigger/Draggable/Lenis interactions
+   Webflow native GSAP build: ScrollTrigger/Draggable/Lenis interactions
    ============================================================ */
 
 (() => {
@@ -18,7 +18,8 @@
     return;
   }
 
-  const TITLE_REVEAL_AT = 0.841;
+  const TITLE_REVEAL_AT = 0.68;
+  const TITLE_REVEAL_END = 0.91;
   const DUST_DENSITY = 1.32;
   const reducedMotion = win.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const isTouch = win.matchMedia("(pointer: coarse)").matches;
@@ -285,10 +286,11 @@
   let frames = new Array(FRAME_COUNT);
   let framePromises = new Array(FRAME_COUNT);
   let currentFrameIndex = 0;
-  let titleRevealed = false;
   let lastKnownScroll = 0;
   let lastKnownVelocity = 0;
   let refreshTimer = 0;
+  let didUserScroll = false;
+  let refreshGateUnlocked = false;
 
   const $ = (selector, scope = doc) => scope.querySelector(selector);
   const $$ = (selector, scope = doc) => Array.from(scope.querySelectorAll(selector));
@@ -304,30 +306,46 @@
     return win.scrollY || doc.documentElement.scrollTop || 0;
   }
 
-  function requestRefresh(delay = 80) {
+  function requestRefresh(delay = 80, force = false) {
     win.clearTimeout(refreshTimer);
-    refreshTimer = win.setTimeout(() => ScrollTrigger.refresh(), delay);
+
+    refreshTimer = win.setTimeout(() => {
+      const isMoving = Math.abs(lastKnownVelocity) > 0.02;
+      const shouldDefer = !force && didUserScroll && isMoving;
+
+      if (shouldDefer) {
+        requestRefresh(180, force);
+        return;
+      }
+
+      ScrollTrigger.refresh();
+    }, delay);
   }
 
   function refreshWhenLayoutSettles() {
-    requestRefresh(120);
+    requestRefresh(160, true);
 
-    addEvent(win, "load", () => requestRefresh(60), { once: true });
+    addEvent(win, "load", () => requestRefresh(120, true), { once: true });
 
     if (doc.fonts && doc.fonts.ready) {
-      doc.fonts.ready.then(() => requestRefresh(40)).catch(() => {});
+      doc.fonts.ready.then(() => requestRefresh(120, true)).catch(() => {});
     }
 
-    Array.from(doc.images || []).forEach((image) => {
-      if (image.complete) return;
-      addEvent(image, "load", () => requestRefresh(40), { once: true });
-      addEvent(image, "error", () => requestRefresh(40), { once: true });
-    });
+    // Webflow lazy-loaded images can fire load events as the user reaches lower sections.
+    // Refreshing during that moment can make scrubbed triggers and entrance timelines jump,
+    // so runtime image loads are intentionally not tied to ScrollTrigger.refresh().
+    win.setTimeout(() => { refreshGateUnlocked = true; }, 1800);
   }
 
   /* ── Lenis smooth scroll ─────────────────────────────────── */
 
   function initLenis() {
+    const removeNativeScrollFlag = addEvent(win, "scroll", () => {
+      if (refreshGateUnlocked && getScrollY() > 8) didUserScroll = true;
+    }, { passive: true });
+
+    mainCtx.add(() => () => removeNativeScrollFlag());
+
     if (reducedMotion || !Lenis) return;
 
     lenis = new Lenis({
@@ -345,6 +363,7 @@
     lenis.on("scroll", (event) => {
       lastKnownScroll = typeof event.scroll === "number" ? event.scroll : getScrollY();
       lastKnownVelocity = typeof event.velocity === "number" ? event.velocity : 0;
+      if (refreshGateUnlocked && Math.abs(lastKnownVelocity) > 0.02) didUserScroll = true;
       ScrollTrigger.update();
     });
 
@@ -403,8 +422,6 @@
 
       if (pointer < order.length) {
         win.setTimeout(loadBatch, 90);
-      } else {
-        requestRefresh(120);
       }
     }
 
@@ -487,13 +504,17 @@
     warmFrameCache();
   }
 
-  /* ── Scroll scrub — drives canvas frame index ────────────── */
+  /* ── Scroll scrub — drives canvas frame index + title reveal ─ */
 
   function initScrollScrub() {
     const heroPin = $('[data-gsap="home-hero-pin"]');
     if (!heroPin || !canvas) return;
 
     mainCtx.add(() => {
+      const titleTimeline = buildTitleRevealTimeline();
+      const reveal = $('[data-gsap="home-hero-reveal"]');
+      const cta = $('[data-gsap="home-hero-cta"]');
+
       ScrollTrigger.create({
         trigger: heroPin,
         start: "top top",
@@ -503,36 +524,47 @@
         onUpdate(self) {
           drawFrame(self.progress * (FRAME_COUNT - 1));
 
-          if (!titleRevealed && self.progress >= TITLE_REVEAL_AT) {
-            titleRevealed = true;
-            revealTitle();
+          if (titleTimeline) {
+            const revealProgress = clamp(
+              0,
+              1,
+              (self.progress - TITLE_REVEAL_AT) / (TITLE_REVEAL_END - TITLE_REVEAL_AT)
+            );
+
+            titleTimeline.progress(revealProgress);
+
+            const isInteractive = revealProgress >= 0.98;
+            if (reveal) reveal.style.pointerEvents = isInteractive ? "auto" : "none";
+            if (cta) cta.style.pointerEvents = isInteractive ? "auto" : "none";
           }
         },
       });
     });
   }
 
-  /* ── Title reveal — stagger-in overlay ───────────────────── */
+  /* ── Title reveal — scrubbed so both title lines finish in view ─ */
 
-  function revealTitle() {
+  function buildTitleRevealTimeline() {
     const eyebrow = $('[data-gsap="home-hero-eyebrow"]');
-    const lines = $$('[data-gsap="home-hero-line", data-gsap="home-hero-line-2"]');
+    const lines = $$('[data-gsap="home-hero-line"]');
+    const titleLines = lines.filter((element) => !element.classList.contains("presents"));
+    const presents = lines.filter((element) => element.classList.contains("presents"));
     const cta = $('[data-gsap="home-hero-cta"]');
-    const reveal = $('[data-gsap="home-hero-reveal"]');
-    const targets = [eyebrow, ...lines, cta].filter(Boolean);
+    const targets = [eyebrow, ...titleLines, ...presents, cta].filter(Boolean);
 
-    if (!targets.length) return;
+    if (!targets.length) return null;
 
-    gsap.timeline({
+    gsap.set(targets, { opacity: 0, y: 28, force3D: true });
+    gsap.set(titleLines, { y: 40 });
+
+    return gsap.timeline({
+      paused: true,
       defaults: { ease: "power2.out" },
-      onComplete() {
-        if (reveal) reveal.style.pointerEvents = "auto";
-        if (cta) cta.style.pointerEvents = "auto";
-      },
     })
-      .to(eyebrow, { opacity: 1, y: 0, duration: 0.55 })
-      .to(lines, { opacity: 1, y: 0, duration: 0.8, stagger: 0.1 }, "-=0.24")
-      .to(cta, { opacity: 1, y: 0, duration: 0.55 }, "-=0.22");
+      .to(eyebrow, { opacity: 1, y: 0, duration: 0.22 }, 0)
+      .to(titleLines, { opacity: 1, y: 0, duration: 0.42, stagger: 0.055 }, 0.08)
+      .to(presents, { opacity: 1, y: 0, duration: 0.26 }, 0.48)
+      .to(cta, { opacity: 1, y: 0, duration: 0.28 }, 0.62);
   }
 
   function showReducedHero() {
@@ -1184,8 +1216,8 @@
           trigger: section,
           start: "top 82%",
           end: "top 20%",
-          toggleActions: "play none none reverse",
-          invalidateOnRefresh: true,
+          toggleActions: "play none none none",
+          once: true,
         },
       });
 
@@ -1197,34 +1229,20 @@
         .from(scheduleHeading, { opacity: 0, y: 12, duration: 0.35, ease: "power2.out", immediateRender: false }, "-=0.3")
         .from(events, { opacity: 0, y: 20, scale: 0.97, duration: 0.5, stagger: 0.12, ease: "power2.out", immediateRender: false }, "-=0.2");
 
-      if (posterGlow) {
-        ScrollTrigger.create({
-          trigger: section,
-          start: "top 90%",
-          end: "bottom 10%",
-          invalidateOnRefresh: true,
-          onEnter: () => gsap.to(posterGlow, { opacity: 1, duration: 1.2, ease: "power2.out" }),
-          onLeave: () => gsap.to(posterGlow, { opacity: 0.3, duration: 0.8, ease: "power2.in" }),
-          onEnterBack: () => gsap.to(posterGlow, { opacity: 1, duration: 1.2, ease: "power2.out" }),
-          onLeaveBack: () => gsap.to(posterGlow, { opacity: 0.3, duration: 0.8, ease: "power2.in" }),
-        });
-      }
+      // Poster glow is animated by CSS. Avoid writing GSAP opacity/transform
+      // to the same element, which can cause visible stutter in this section.
     });
 
     if (isTouch || reducedMotion) return;
 
     const rotateX = gsap.quickTo(poster, "rotateX", { duration: 0.4, ease: "power2.out" });
     const rotateY = gsap.quickTo(poster, "rotateY", { duration: 0.4, ease: "power2.out" });
-    const glowX = posterGlow ? gsap.quickTo(posterGlow, "x", { duration: 0.6, ease: "power2.out" }) : null;
-    const glowY = posterGlow ? gsap.quickTo(posterGlow, "y", { duration: 0.6, ease: "power2.out" }) : null;
 
     let trackingActive = false;
 
     function resetPoster() {
       rotateX(0);
       rotateY(0);
-      if (glowX) glowX(0);
-      if (glowY) glowY(0);
     }
 
     function onMouseMove(event) {
@@ -1239,8 +1257,6 @@
 
       rotateY(clamp(-1, 1, dx) * maxAngle);
       rotateX(clamp(-1, 1, -dy) * maxAngle);
-      if (glowX) glowX(clamp(-1, 1, dx) * 20);
-      if (glowY) glowY(clamp(-1, 1, dy) * 15);
     }
 
     mainCtx.add(() => {
@@ -1248,7 +1264,6 @@
         trigger: section,
         start: "top 95%",
         end: "bottom 5%",
-        invalidateOnRefresh: true,
         onEnter: () => { trackingActive = true; },
         onLeave: () => { trackingActive = false; resetPoster(); },
         onEnterBack: () => { trackingActive = true; },
@@ -1372,8 +1387,8 @@
           rotateX: 0,
           duration: 0.58,
           ease: "power2.out",
-          onUpdate: () => requestRefresh(40),
-          onComplete: () => requestRefresh(20),
+          onUpdate: () => requestRefresh(40, true),
+          onComplete: () => requestRefresh(20, true),
         });
 
         gsap.to(trigger, { scale: 0.96, opacity: 0.68, duration: 0.25, ease: "power2.out" });
@@ -1386,11 +1401,11 @@
           rotateX: 12,
           duration: 0.35,
           ease: "power2.in",
-          onUpdate: () => requestRefresh(40),
+          onUpdate: () => requestRefresh(40, true),
           onComplete() {
             panel.classList.remove("clt-state-open");
             panel.setAttribute("aria-hidden", "true");
-            requestRefresh(20);
+            requestRefresh(20, true);
           },
         });
 
@@ -1456,7 +1471,7 @@
       ScrollTrigger.create({
         trigger: footer,
         start: "top 90%",
-        invalidateOnRefresh: true,
+        once: true,
         onEnter() {
           gsap.timeline()
             .from(brand, { opacity: 0, y: 20, duration: 0.5, ease: "power2.out", immediateRender: false })
@@ -1464,9 +1479,6 @@
             .from(social, { opacity: 0, y: 20, duration: 0.4, ease: "power2.out", immediateRender: false }, "-=0.2")
             .from(socialLinks, { opacity: 0, y: 10, duration: 0.3, stagger: 0.05, ease: "power2.out", immediateRender: false }, "-=0.16")
             .from(legal, { opacity: 0, y: 20, duration: 0.35, ease: "power2.out", immediateRender: false }, "-=0.15");
-        },
-        onLeaveBack() {
-          gsap.set([brand, footerNav, social, legal, ...socialLinks].filter(Boolean), { clearProps: "opacity,transform" });
         },
       });
     });
