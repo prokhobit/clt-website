@@ -8,21 +8,19 @@
 
   const win = window;
   const doc = document;
-  const gsap = win.gsap;
-  const ScrollTrigger = win.ScrollTrigger;
-  const Draggable = win.Draggable;
-  const Lenis = win.Lenis;
-
-  if (!gsap || !ScrollTrigger) {
-    console.warn("[home.js] GSAP and ScrollTrigger must load before home.js.");
-    return;
-  }
+  let gsap = win.gsap;
+  let ScrollTrigger = win.ScrollTrigger;
+  let Draggable = win.Draggable;
+  let Lenis = win.Lenis;
 
   const TITLE_REVEAL_AT = 0.68;
   const TITLE_REVEAL_END = 0.91;
   const DUST_DENSITY = 1.32;
   const reducedMotion = win.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const isTouch = win.matchMedia("(pointer: coarse)").matches;
+  const isSmallViewport = win.matchMedia("(max-width: 760px)").matches;
+  const isMobileLike = isTouch || isSmallViewport;
+  const FRAME_STEP = isMobileLike ? 3 : 1;
 
   const FRAME_URLS = [
     "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a35ad19668aae30c2f4_frame-0001.avif",
@@ -274,9 +272,8 @@
   ];
 
   const FRAME_COUNT = FRAME_URLS.length;
-  const clamp = gsap.utils.clamp;
-  const random = gsap.utils.random;
-  const toArray = gsap.utils.toArray;
+  const clamp = (min, max, value) => Math.min(max, Math.max(min, value));
+  const random = (min, max) => min + Math.random() * (max - min);
 
   let lenis = null;
   let mainCtx = null;
@@ -291,6 +288,8 @@
   let refreshTimer = 0;
   let didUserScroll = false;
   let refreshGateUnlocked = false;
+  let lockedViewportWidth = 0;
+  let lockedViewportHeight = 0;
 
   const $ = (selector, scope = doc) => scope.querySelector(selector);
   const $$ = (selector, scope = doc) => Array.from(scope.querySelectorAll(selector));
@@ -299,6 +298,82 @@
     if (!target || !target.addEventListener) return () => {};
     target.addEventListener(type, handler, options);
     return () => target.removeEventListener(type, handler, options);
+  }
+
+  function normalizeFrameIndex(index) {
+    const rounded = Math.round(index);
+    if (FRAME_STEP <= 1) return clamp(0, FRAME_COUNT - 1, rounded);
+    return clamp(0, FRAME_COUNT - 1, Math.round(rounded / FRAME_STEP) * FRAME_STEP);
+  }
+
+  function getViewportHeight() {
+    return Math.round((win.visualViewport && win.visualViewport.height) || win.innerHeight || 1);
+  }
+
+  function getViewportWidth() {
+    return Math.round((win.visualViewport && win.visualViewport.width) || win.innerWidth || 1);
+  }
+
+  function syncMobileViewport(force = false) {
+    if (!isMobileLike) return false;
+
+    const width = getViewportWidth();
+    const height = getViewportHeight();
+    const widthChanged = Math.abs(width - lockedViewportWidth) > 24;
+
+    if (!force && lockedViewportHeight && !widthChanged) return false;
+
+    lockedViewportWidth = width;
+    lockedViewportHeight = height;
+
+    doc.documentElement.style.setProperty("--clt-js-vh", `${height * 0.01}px`);
+
+    const heroPin = $('[data-gsap="home-hero-pin"]');
+    const hero = $("#clt-home-hero");
+    const pinMultiplier = parseFloat(win.getComputedStyle(doc.documentElement).getPropertyValue("--pin-multiplier")) || 3;
+
+    if (hero) hero.style.height = `${height}px`;
+    if (heroPin) heroPin.style.height = `${Math.round(height * pinMultiplier)}px`;
+
+    resizeCanvas();
+    return true;
+  }
+
+  function initMobileViewportLock() {
+    if (!isMobileLike) return;
+
+    syncMobileViewport(true);
+
+    mainCtx.add(() => {
+      let timer = 0;
+
+      const schedule = (force = false) => {
+        win.clearTimeout(timer);
+        timer = win.setTimeout(() => {
+          if (syncMobileViewport(force)) requestRefresh(140, true);
+        }, 120);
+      };
+
+      const cleanups = [
+        addEvent(win, "orientationchange", () => schedule(true), { passive: true }),
+        addEvent(win, "resize", () => {
+          const widthChanged = Math.abs(getViewportWidth() - lockedViewportWidth) > 24;
+          if (widthChanged) schedule(true);
+        }, { passive: true }),
+      ];
+
+      if (win.visualViewport) {
+        cleanups.push(addEvent(win.visualViewport, "resize", () => {
+          const widthChanged = Math.abs(getViewportWidth() - lockedViewportWidth) > 24;
+          if (widthChanged) schedule(true);
+        }, { passive: true }));
+      }
+
+      return () => {
+        win.clearTimeout(timer);
+        cleanups.forEach((cleanup) => cleanup());
+      };
+    });
   }
 
   function getScrollY() {
@@ -346,7 +421,7 @@
 
     mainCtx.add(() => () => removeNativeScrollFlag());
 
-    if (reducedMotion || !Lenis) return;
+    if (reducedMotion || isMobileLike || !Lenis) return;
 
     lenis = new Lenis({
       lerp: 0.08,
@@ -381,6 +456,8 @@
   }
 
   function loadFrame(index) {
+    index = normalizeFrameIndex(index);
+
     if (index < 0 || index >= FRAME_COUNT) return Promise.resolve(null);
     if (frames[index]) return Promise.resolve(frames[index]);
     if (framePromises[index]) return framePromises[index];
@@ -405,10 +482,10 @@
     loadFrame(0).then(() => drawFrame(0));
 
     const order = [];
-    for (let i = 1; i < FRAME_COUNT; i += 1) order.push(i);
+    for (let i = FRAME_STEP; i < FRAME_COUNT; i += FRAME_STEP) order.push(i);
 
     let pointer = 0;
-    const batchSize = 8;
+    const batchSize = isMobileLike ? 3 : 8;
 
     function loadBatch() {
       const batch = order.slice(pointer, pointer + batchSize);
@@ -444,7 +521,7 @@
   function drawFrame(index) {
     if (!canvas || !canvasContext) return;
 
-    const requestedIndex = clamp(0, FRAME_COUNT - 1, Math.round(index));
+    const requestedIndex = normalizeFrameIndex(index);
     currentFrameIndex = requestedIndex;
 
     if (!frames[requestedIndex]) {
@@ -470,7 +547,7 @@
   function resizeCanvas() {
     if (!canvas || !canvasContext) return;
 
-    const dpr = Math.min(win.devicePixelRatio || 1, 2);
+    const dpr = Math.min(win.devicePixelRatio || 1, isMobileLike ? 1.25 : 2);
     const rect = canvas.getBoundingClientRect();
     const width = Math.max(1, Math.round(rect.width * dpr));
     const height = Math.max(1, Math.round(rect.height * dpr));
@@ -691,7 +768,7 @@
       $$(".clt-home-dust.particle", container).forEach((particle) => particle.remove());
     });
 
-    const density = reducedMotion ? 0.45 : DUST_DENSITY;
+    const density = reducedMotion ? 0.35 : (isMobileLike ? 0.7 : DUST_DENSITY);
     const tones = ["warm", "warm", "warm", "brass", "brass", "cool"];
     const stars = [];
     const wrapPercent = gsap.utils.wrap(0, 100);
@@ -1011,7 +1088,12 @@
   /* ── Explore — infinite draggable carousel ───────────────── */
 
   function initExploreCarousel() {
-    const section = $("#explore");
+    const section = $("#explore") || $("#education");
+    if (section && section.id === "education") {
+      section.id = "explore";
+      $$("[href='#education']").forEach((link) => link.setAttribute("href", "#explore"));
+    }
+
     const track = $("#explore-track");
     const trackMask = $("#explore-mask");
     if (!section || !track || !trackMask) return;
@@ -1604,9 +1686,13 @@
 
   function init() {
     gsap.defaults({ overwrite: "auto" });
-    ScrollTrigger.config({ ignoreMobileResize: true });
+    ScrollTrigger.config({
+      ignoreMobileResize: true,
+      autoRefreshEvents: isMobileLike ? "visibilitychange,DOMContentLoaded,load" : "visibilitychange,DOMContentLoaded,load,resize",
+    });
 
     mainCtx = gsap.context(() => {}, doc.documentElement);
+    initMobileViewportLock();
 
     initHeroCanvas();
     initLenis();
@@ -1630,9 +1716,36 @@
     refreshWhenLayoutSettles();
   }
 
+  function startWhenReady() {
+    let attempts = 0;
+    const maxAttempts = 90;
+
+    const tryStart = () => {
+      gsap = win.gsap;
+      ScrollTrigger = win.ScrollTrigger;
+      Draggable = win.Draggable;
+      Lenis = win.Lenis;
+
+      if (gsap && ScrollTrigger) {
+        init();
+        return;
+      }
+
+      attempts += 1;
+      if (attempts < maxAttempts) {
+        win.setTimeout(tryStart, 50);
+        return;
+      }
+
+      console.warn("[home.js] GSAP and ScrollTrigger were not available before home.js timed out.");
+    };
+
+    tryStart();
+  }
+
   if (doc.readyState === "loading") {
-    doc.addEventListener("DOMContentLoaded", init, { once: true });
+    doc.addEventListener("DOMContentLoaded", startWhenReady, { once: true });
   } else {
-    init();
+    startWhenReady();
   }
 })();
