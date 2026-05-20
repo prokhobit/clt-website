@@ -20,7 +20,7 @@
   const isTouch = win.matchMedia("(pointer: coarse)").matches;
   const isSmallViewport = win.matchMedia("(max-width: 760px)").matches;
   const isMobileLike = isTouch || isSmallViewport;
-  const FRAME_STEP = isMobileLike ? 3 : 1;
+  const FRAME_STEP = isMobileLike ? 8 : 1;
 
   const FRAME_URLS = [
     "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a35ad19668aae30c2f4_frame-0001.avif",
@@ -466,8 +466,12 @@
       const image = new Image();
       image.decoding = "async";
       image.onload = () => {
-        frames[index] = image;
-        resolve(image);
+        /* Decode off main thread when supported (Safari 11+, Chrome 64+) */
+        const ready = image.decode ? image.decode().then(() => image, () => image) : Promise.resolve(image);
+        ready.then((img) => {
+          frames[index] = img;
+          resolve(img);
+        });
       };
       image.onerror = () => resolve(null);
       image.src = frameSrc(index);
@@ -498,7 +502,7 @@
       });
 
       if (pointer < order.length) {
-        win.setTimeout(loadBatch, 90);
+        win.setTimeout(loadBatch, isMobileLike ? 250 : 90);
       }
     }
 
@@ -698,7 +702,9 @@
     foldConfig.forEach((group) => {
       if (group.el.querySelector('[data-generated="home-curtain-fold"]')) return;
 
-      group.folds.forEach((fold) => {
+      /* On mobile, use every other fold to halve DOM nodes + CSS animations */
+      const activeFolds = isMobileLike ? group.folds.filter((_, i) => i % 2 === 0) : group.folds;
+      activeFolds.forEach((fold) => {
         const element = doc.createElement("div");
         element.className = `clt-home-curtain fold ${fold.cls}`;
         element.dataset.generated = "home-curtain-fold";
@@ -748,7 +754,18 @@
             gsap.set(prompt, { opacity: Math.max(0, 1 - rawProgress * 5) });
           }
 
-          stage.style.visibility = rawProgress >= 1 ? "hidden" : "visible";
+          if (rawProgress >= 1) {
+            stage.style.visibility = "hidden";
+            /* Kill the 20 fold CSS animations once the curtain is fully open */
+            if (!stage._foldsKilled) {
+              stage._foldsKilled = true;
+              stage.querySelectorAll('[data-generated="home-curtain-fold"]').forEach(
+                (fold) => { fold.style.animation = "none"; }
+              );
+            }
+          } else {
+            stage.style.visibility = "visible";
+          }
         },
       });
     });
@@ -768,7 +785,7 @@
       $$(".clt-home-dust.particle", container).forEach((particle) => particle.remove());
     });
 
-    const density = reducedMotion ? 0.35 : (isMobileLike ? 0.7 : DUST_DENSITY);
+    const density = reducedMotion ? 0.35 : (isMobileLike ? 0.3 : DUST_DENSITY);
     const tones = ["warm", "warm", "warm", "brass", "brass", "cool"];
     const stars = [];
     const wrapPercent = gsap.utils.wrap(0, 100);
@@ -791,7 +808,7 @@
         element.style.height = `${size}px`;
         element.style.left = `${baseX}%`;
         element.style.top = `${baseY}%`;
-        element.style.willChange = "transform, top, opacity";
+        if (!isMobileLike) element.style.willChange = "transform, top, opacity";
         element.style.setProperty("--twinkle-dur", `${random(2.4, 7.2)}s`);
         element.style.setProperty("--twinkle-delay", `${random(0, 5.5)}s`);
         element.style.setProperty("--twinkle-lo", random(0.15, 0.36).toFixed(2));
@@ -857,7 +874,15 @@
       lastPointerY = event.clientY;
     }, { passive: true });
 
+    let dustSkip = false;
+
     const ticker = () => {
+      /* On mobile, run at ~30fps by skipping every other frame */
+      if (isMobileLike) {
+        dustSkip = !dustSkip;
+        if (dustSkip) return;
+      }
+
       const scroll = getScrollY();
       const scrollDelta = scroll - lastScroll;
       lastScroll = scroll;
@@ -1212,8 +1237,15 @@
 
     mainCtx.add(() => {
       let previousScroll = getScrollY();
+      let carouselSkip = false;
 
       const ticker = () => {
+        /* On mobile, run at ~30fps */
+        if (isMobileLike) {
+          carouselSkip = !carouselSkip;
+          if (carouselSkip) return;
+        }
+
         const currentScroll = getScrollY();
         const delta = currentScroll - previousScroll;
         previousScroll = currentScroll;
@@ -1682,6 +1714,122 @@
     });
   }
 
+  /* ── Mobile hero — auto-play video, no scroll scrub ─────── */
+
+  /*
+   * Hosted on GitHub Pages (prokhobit/clt-website).
+   */
+  const MOBILE_VIDEO_URL = "https://prokhobit.github.io/clt-website/hero-mobile.mp4";
+
+  function initMobileHero() {
+    const heroPin = $('[data-gsap="home-hero-pin"]');
+    const hero = $("#clt-home-hero");
+    const canvasWrap = $(".clt-home-hero.canvas-wrap", hero);
+    const canvasEl = $("#hero-canvas");
+    const left = $("#clt-home-curtain-left");
+    const right = $("#clt-home-curtain-right");
+    const stage = $('[data-gsap="home-curtain-stage"]');
+    const prompt = $('[data-gsap="home-curtain-prompt"]');
+
+    if (!hero || !canvasWrap) return;
+
+    /* ── 1. Collapse pin wrapper — no scroll distance needed ── */
+    if (heroPin) heroPin.style.height = `${getViewportHeight()}px`;
+
+    /* ── 2. Create video element ───────────────────────────── */
+    const video = doc.createElement("video");
+    video.src = MOBILE_VIDEO_URL;
+    video.muted = true;
+    video.playsInline = true;
+    video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "");
+    video.preload = "auto";
+    video.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;";
+
+    /* Hide the canvas, show the video */
+    if (canvasEl) canvasEl.style.display = "none";
+    canvasWrap.appendChild(video);
+
+    /* ── 3. Build title reveal timeline (paused) ───────────── */
+    const titleTl = buildTitleRevealTimeline();
+    const reveal = $('[data-gsap="home-hero-reveal"]');
+    const cta = $('[data-gsap="home-hero-cta"]');
+
+    /* ── 4. Auto-open curtain + play video on load ─────────── */
+    function startHeroSequence() {
+      const curtainDuration = 1.4;
+
+      /* Animate curtain open */
+      if (left && right && stage) {
+        const openTl = gsap.timeline({
+          onComplete() {
+            stage.style.visibility = "hidden";
+            stage.style.display = "none";
+          },
+        });
+
+        /* Fade out scroll prompt immediately */
+        if (prompt) openTl.to(prompt, { opacity: 0, duration: 0.3 }, 0);
+
+        openTl.to(left, {
+          xPercent: -110,
+          scaleX: 0.72,
+          duration: curtainDuration,
+          ease: "power2.inOut",
+          force3D: true,
+        }, 0);
+
+        openTl.to(right, {
+          xPercent: 110,
+          scaleX: 0.72,
+          duration: curtainDuration,
+          ease: "power2.inOut",
+          force3D: true,
+        }, 0);
+      } else if (stage) {
+        stage.style.display = "none";
+      }
+
+      /* Start video playback */
+      video.play().catch(() => {
+        /* Autoplay blocked — show first frame and reveal title immediately */
+        if (titleTl) titleTl.progress(1);
+        if (reveal) reveal.style.pointerEvents = "auto";
+        if (cta) cta.style.pointerEvents = "auto";
+      });
+
+      /* Reveal title partway through the video */
+      const titleDelay = curtainDuration + 3.8;
+      gsap.delayedCall(titleDelay, () => {
+        if (titleTl) {
+          titleTl.timeScale(1).play();
+          titleTl.eventCallback("onComplete", () => {
+            if (reveal) reveal.style.pointerEvents = "auto";
+            if (cta) cta.style.pointerEvents = "auto";
+          });
+        }
+      });
+    }
+
+    /* Wait for video to have enough data, then start */
+    if (video.readyState >= 3) {
+      startHeroSequence();
+    } else {
+      video.addEventListener("canplaythrough", startHeroSequence, { once: true });
+      /* Fallback if video is slow to buffer */
+      win.setTimeout(() => {
+        if (!video.paused) return; /* already started */
+        startHeroSequence();
+      }, 3000);
+    }
+
+    /* Loop the video when it ends for a living background */
+    video.addEventListener("ended", () => {
+      video.currentTime = 0;
+      video.play().catch(() => {});
+    });
+  }
+
   /* ── Entry point ─────────────────────────────────────────── */
 
   function init() {
@@ -1694,16 +1842,22 @@
     mainCtx = gsap.context(() => {}, doc.documentElement);
     initMobileViewportLock();
 
-    initHeroCanvas();
-    initLenis();
-
-    if (reducedMotion) {
-      showReducedHero();
+    if (isMobileLike && !reducedMotion) {
+      /* Mobile: auto-play video hero — no scroll scrub, no frame loading */
+      initMobileHero();
     } else {
-      initScrollScrub();
-      initCurtain();
+      /* Desktop: full scroll-scrubbed frame sequence */
+      initHeroCanvas();
+
+      if (reducedMotion) {
+        showReducedHero();
+      } else {
+        initScrollScrub();
+        initCurtain();
+      }
     }
 
+    initLenis();
     initDust();
     initSectionParallax();
     initMarquee();
