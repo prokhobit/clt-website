@@ -1113,12 +1113,7 @@
   /* ── Explore — infinite draggable carousel ───────────────── */
 
   function initExploreCarousel() {
-    const section = $("#explore") || $("#education");
-    if (section && section.id === "education") {
-      section.id = "explore";
-      $$("[href='#education']").forEach((link) => link.setAttribute("href", "#explore"));
-    }
-
+    const section = $("#explore");
     const track = $("#explore-track");
     const trackMask = $("#explore-mask");
     if (!section || !track || !trackMask) return;
@@ -1569,34 +1564,9 @@
     }
   }
 
-  /* ── Footer — entrance + legal modals ────────────────────── */
+  /* ── Footer — legal modals ────────────────────────────────── */
 
   function initFooter() {
-    const footer = $("#clt-home-footer");
-    if (!footer) return;
-
-    const brand = $(".clt-home-footer.brand", footer);
-    const footerNav = $(".clt-home-footer.nav", footer);
-    const social = $(".clt-home-footer.social", footer);
-    const legal = $(".clt-home-footer.legal", footer);
-    const socialLinks = $$(".clt-home-footer.social-link", footer);
-
-    mainCtx.add(() => {
-      ScrollTrigger.create({
-        trigger: footer,
-        start: "top 90%",
-        once: true,
-        onEnter() {
-          gsap.timeline()
-            .from(brand, { opacity: 0, y: 20, duration: 0.5, ease: "power2.out", immediateRender: false })
-            .from(footerNav, { opacity: 0, y: 20, duration: 0.4, ease: "power2.out", immediateRender: false }, "-=0.25")
-            .from(social, { opacity: 0, y: 20, duration: 0.4, ease: "power2.out", immediateRender: false }, "-=0.2")
-            .from(socialLinks, { opacity: 0, y: 10, duration: 0.3, stagger: 0.05, ease: "power2.out", immediateRender: false }, "-=0.16")
-            .from(legal, { opacity: 0, y: 20, duration: 0.35, ease: "power2.out", immediateRender: false }, "-=0.15");
-        },
-      });
-    });
-
     initLegalModals();
   }
 
@@ -1679,36 +1649,6 @@
       cleanups.push(addEvent(win, "keydown", (event) => {
         if (event.key === "Escape" && activeModal) closeModal(activeModal);
       }));
-
-      return () => cleanups.forEach((cleanup) => cleanup());
-    });
-  }
-
-  /* ── Smooth anchor links ─────────────────────────────────── */
-
-  function initSmoothAnchors() {
-    mainCtx.add(() => {
-      const cleanups = $$("[href^='#']").map((anchor) => (
-        addEvent(anchor, "click", (event) => {
-          const href = anchor.getAttribute("href");
-          if (!href || href === "#") return;
-
-          const target = doc.getElementById(href.slice(1));
-          if (!target) return;
-
-          event.preventDefault();
-
-          const navShell = $(".clt-navbar-shell");
-          const navOffset = navShell ? -Math.ceil(navShell.getBoundingClientRect().height + 18) : -80;
-
-          if (lenis && typeof lenis.scrollTo === "function") {
-            lenis.scrollTo(target, { offset: navOffset, duration: 1.25 });
-          } else {
-            const top = target.getBoundingClientRect().top + win.scrollY + navOffset;
-            win.scrollTo({ top, behavior: reducedMotion ? "auto" : "smooth" });
-          }
-        })
-      ));
 
       return () => cleanups.forEach((cleanup) => cleanup());
     });
@@ -1861,7 +1801,6 @@
     initPastPerformances();
     initSubscribeDonate();
     initFooter();
-    initSmoothAnchors();
     refreshWhenLayoutSettles();
   }
 
