@@ -1823,11 +1823,6 @@
       }, 3000);
     }
 
-    /* Loop the video when it ends for a living background */
-    video.addEventListener("ended", () => {
-      video.currentTime = 0;
-      video.play().catch(() => {});
-    });
   }
 
   /* ── Entry point ─────────────────────────────────────────── */
