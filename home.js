@@ -267,8 +267,6 @@
     "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a540030b57ecf440576_frame-0248.avif",
     "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a54f29cfaca54deb5e2_frame-0249.avif",
     "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a54f4eec82dd5e0fca3_frame-0250.avif",
-    "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a490f84346383459580_frame-0251.avif",
-    "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a4b7666c90470b4e1f4_frame-0252.avif",
   ];
 
   const FRAME_COUNT = FRAME_URLS.length;
