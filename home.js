@@ -20,7 +20,7 @@
   const isTouch = win.matchMedia("(pointer: coarse)").matches;
   const isSmallViewport = win.matchMedia("(max-width: 760px)").matches;
   const isMobileLike = isTouch || isSmallViewport;
-  const FRAME_STEP = isMobileLike ? 8 : 1;
+  const FRAME_STEP = isMobileLike ? 3 : 1;
 
   const FRAME_URLS = [
     "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a35ad19668aae30c2f4_frame-0001.avif",
@@ -464,12 +464,8 @@
       const image = new Image();
       image.decoding = "async";
       image.onload = () => {
-        /* Decode off main thread when supported (Safari 11+, Chrome 64+) */
-        const ready = image.decode ? image.decode().then(() => image, () => image) : Promise.resolve(image);
-        ready.then((img) => {
-          frames[index] = img;
-          resolve(img);
-        });
+        frames[index] = image;
+        resolve(image);
       };
       image.onerror = () => resolve(null);
       image.src = frameSrc(index);
@@ -500,7 +496,7 @@
       });
 
       if (pointer < order.length) {
-        win.setTimeout(loadBatch, isMobileLike ? 250 : 90);
+        win.setTimeout(loadBatch, 90);
       }
     }
 
@@ -626,8 +622,9 @@
   function buildTitleRevealTimeline() {
     const eyebrow = $('[data-gsap="home-hero-eyebrow"]');
     const lines = $$('[data-gsap="home-hero-line"]');
-    const titleLines = lines.filter((element) => !element.classList.contains("presents"));
-    const presents = lines.filter((element) => element.classList.contains("presents"));
+    const titleLines = lines.filter((element) => !element.classList.contains("is-presents"));
+    const presents = lines.filter((element) => element.classList.contains("is-presents"));
+    const cta = $('[data-gsap="home-hero-cta"]');
     const targets = [eyebrow, ...titleLines, ...presents, cta].filter(Boolean);
 
     if (!targets.length) return null;
@@ -648,7 +645,7 @@
   function showReducedHero() {
     loadFrame(0).then(() => drawFrame(0));
 
-    $$('[data-gsap="home-hero-line"], [data-gsap="home-hero-eyebrow"]').forEach((element) => {
+    $$('[data-gsap="home-hero-line"], [data-gsap="home-hero-eyebrow"], [data-gsap="home-hero-cta"]').forEach((element) => {
       gsap.set(element, { opacity: 1, y: 0, clearProps: "transform" });
     });
 
@@ -699,11 +696,9 @@
     foldConfig.forEach((group) => {
       if (group.el.querySelector('[data-generated="home-curtain-fold"]')) return;
 
-      /* On mobile, use every other fold to halve DOM nodes + CSS animations */
-      const activeFolds = isMobileLike ? group.folds.filter((_, i) => i % 2 === 0) : group.folds;
-      activeFolds.forEach((fold) => {
+      group.folds.forEach((fold) => {
         const element = doc.createElement("div");
-        element.className = `clt-home-curtain fold ${fold.cls}`;
+        element.className = `clt-home-curtain is-fold is-${fold.cls}`;
         element.dataset.generated = "home-curtain-fold";
         element.style.left = fold.left;
         element.style.animation = `${fold.anim} ${fold.dur} ${fold.delay} ease-in-out infinite alternate`;
@@ -751,18 +746,7 @@
             gsap.set(prompt, { opacity: Math.max(0, 1 - rawProgress * 5) });
           }
 
-          if (rawProgress >= 1) {
-            stage.style.visibility = "hidden";
-            /* Kill the 20 fold CSS animations once the curtain is fully open */
-            if (!stage._foldsKilled) {
-              stage._foldsKilled = true;
-              stage.querySelectorAll('[data-generated="home-curtain-fold"]').forEach(
-                (fold) => { fold.style.animation = "none"; }
-              );
-            }
-          } else {
-            stage.style.visibility = "visible";
-          }
+          stage.style.visibility = rawProgress >= 1 ? "hidden" : "visible";
         },
       });
     });
@@ -779,10 +763,10 @@
 
     const containers = [far, mid, near].filter(Boolean);
     containers.forEach((container) => {
-      $$(".clt-home-dust.particle", container).forEach((particle) => particle.remove());
+      $$(".clt-home-dust.is-particle", container).forEach((particle) => particle.remove());
     });
 
-    const density = reducedMotion ? 0.35 : (isMobileLike ? 0.3 : DUST_DENSITY);
+    const density = reducedMotion ? 0.35 : (isMobileLike ? 0.7 : DUST_DENSITY);
     const tones = ["warm", "warm", "warm", "brass", "brass", "cool"];
     const stars = [];
     const wrapPercent = gsap.utils.wrap(0, 100);
@@ -800,12 +784,12 @@
         const baseX = random(0, 100);
         const baseY = random(0, 100);
 
-        element.className = `clt-home-dust particle ${tone}`;
+        element.className = `clt-home-dust is-particle is-${tone}`;
         element.style.width = `${size}px`;
         element.style.height = `${size}px`;
         element.style.left = `${baseX}%`;
         element.style.top = `${baseY}%`;
-        if (!isMobileLike) element.style.willChange = "transform, top, opacity";
+        element.style.willChange = "transform, top, opacity";
         element.style.setProperty("--twinkle-dur", `${random(2.4, 7.2)}s`);
         element.style.setProperty("--twinkle-delay", `${random(0, 5.5)}s`);
         element.style.setProperty("--twinkle-lo", random(0.15, 0.36).toFixed(2));
@@ -871,15 +855,7 @@
       lastPointerY = event.clientY;
     }, { passive: true });
 
-    let dustSkip = false;
-
     const ticker = () => {
-      /* On mobile, run at ~30fps by skipping every other frame */
-      if (isMobileLike) {
-        dustSkip = !dustSkip;
-        if (dustSkip) return;
-      }
-
       const scroll = getScrollY();
       const scrollDelta = scroll - lastScroll;
       lastScroll = scroll;
@@ -967,6 +943,84 @@
     });
   }
 
+  /* ── Section parallax ────────────────────────────────────── */
+
+  function initSectionParallax() {
+    const sections = $$('[data-gsap~="home-section"]');
+    if (!sections.length) return;
+
+    mainCtx.add(() => {
+      sections.forEach((section) => {
+        const kicker = $(".clt-eyebrow", section);
+        const title = $(".clt-home-explore.is-title, .clt-home-upcoming.is-title, .clt-home-past.is-title, .clt-home-subscribe.is-title", section);
+        const subtitle = $(".clt-home-upcoming.is-subtitle, .clt-home-past.is-subtitle, .clt-home-subscribe.is-desc", section);
+
+        if (kicker) {
+          gsap.fromTo(kicker, { y: 30, opacity: 0 }, {
+            y: 0,
+            opacity: 1,
+            ease: "none",
+            immediateRender: false,
+            scrollTrigger: {
+              trigger: section,
+              start: "top 88%",
+              end: "top 55%",
+              scrub: 0.8,
+              invalidateOnRefresh: true,
+            },
+          });
+        }
+
+        if (title) {
+          gsap.fromTo(title, { y: 50, opacity: 0, scale: 0.97 }, {
+            y: 0,
+            opacity: 1,
+            scale: 1,
+            ease: "none",
+            immediateRender: false,
+            scrollTrigger: {
+              trigger: section,
+              start: "top 85%",
+              end: "top 50%",
+              scrub: 0.8,
+              invalidateOnRefresh: true,
+            },
+          });
+        }
+
+        if (subtitle) {
+          gsap.fromTo(subtitle, { y: 25, opacity: 0 }, {
+            y: 0,
+            opacity: 1,
+            ease: "none",
+            immediateRender: false,
+            scrollTrigger: {
+              trigger: section,
+              start: "top 80%",
+              end: "top 48%",
+              scrub: 0.8,
+              invalidateOnRefresh: true,
+            },
+          });
+        }
+      });
+
+      $$('[data-gsap~="home-bloom"]').forEach((bloom, index) => {
+        gsap.to(bloom, {
+          y: (index % 2 === 0 ? 1 : -1) * 80,
+          ease: "none",
+          scrollTrigger: {
+            trigger: ".clt-page",
+            start: "top top",
+            end: "bottom bottom",
+            scrub: 1.2,
+            invalidateOnRefresh: true,
+          },
+        });
+      });
+    });
+  }
+
   /* ── Marquee — scroll-direction aware ────────────────────── */
 
   function initMarquee() {
@@ -1032,7 +1086,12 @@
   /* ── Explore — infinite draggable carousel ───────────────── */
 
   function initExploreCarousel() {
-    const section = $("#explore");
+    const section = $("#explore") || $("#education");
+    if (section && section.id === "education") {
+      section.id = "explore";
+      $$("[href='#education']").forEach((link) => link.setAttribute("href", "#explore"));
+    }
+
     const track = $("#explore-track");
     const trackMask = $("#explore-mask");
     if (!section || !track || !trackMask) return;
@@ -1151,15 +1210,8 @@
 
     mainCtx.add(() => {
       let previousScroll = getScrollY();
-      let carouselSkip = false;
 
       const ticker = () => {
-        /* On mobile, run at ~30fps */
-        if (isMobileLike) {
-          carouselSkip = !carouselSkip;
-          if (carouselSkip) return;
-        }
-
         const currentScroll = getScrollY();
         const delta = currentScroll - previousScroll;
         previousScroll = currentScroll;
@@ -1214,12 +1266,92 @@
         addEvent(win, "mouseup", () => { if (isDragging) { isDragging = false; update(); } }),
       ];
 
-      $$(".clt-home-explore.card", track).forEach((card) => {
+      $$(".clt-home-explore.is-card", track).forEach((card) => {
         cleanups.push(addEvent(card, "mouseenter", update));
         cleanups.push(addEvent(card, "mouseleave", update));
       });
 
       return () => cleanups.forEach((cleanup) => cleanup());
+    });
+  }
+
+  /* ── Upcoming events — entrance + mouse-tracking parallax ── */
+
+  function initUpcomingEvents() {
+    const section = $("#season");
+    const posterWrap = $("#upcoming-poster-wrap");
+    const poster = $("#upcoming-poster");
+    if (!section || !posterWrap || !poster) return;
+
+    const header = $(".clt-home-upcoming.is-header", section);
+    const posterGlow = $(".clt-home-upcoming.is-poster-glow", section);
+    const descriptors = $$(".clt-home-upcoming.is-descriptor", section);
+    const events = $$(".clt-home-upcoming.is-event", section);
+    const sep = $(".clt-home-upcoming.is-sep", section);
+    const scheduleHeading = $(".clt-home-upcoming.is-schedule-heading", section);
+
+    mainCtx.add(() => {
+      const entranceTl = gsap.timeline({
+        scrollTrigger: {
+          trigger: section,
+          start: "top 82%",
+          end: "top 20%",
+          toggleActions: "play none none none",
+          once: true,
+        },
+      });
+
+      entranceTl
+        .from(header, { opacity: 0, y: 30, duration: 0.6, ease: "power2.out", immediateRender: false })
+        .from(posterWrap, { opacity: 0, y: 40, scale: 0.96, duration: 0.8, ease: "power2.out", immediateRender: false }, "-=0.3")
+        .from(descriptors, { opacity: 0, y: 20, duration: 0.45, stagger: 0.06, ease: "power2.out", immediateRender: false }, "-=0.5")
+        .from(sep, { opacity: 0, scaleX: 0, duration: 0.5, ease: "power2.out", immediateRender: false }, "-=0.2")
+        .from(scheduleHeading, { opacity: 0, y: 12, duration: 0.35, ease: "power2.out", immediateRender: false }, "-=0.3")
+        .from(events, { opacity: 0, y: 20, scale: 0.97, duration: 0.5, stagger: 0.12, ease: "power2.out", immediateRender: false }, "-=0.2");
+
+      // Poster glow is animated by CSS. Avoid writing GSAP opacity/transform
+      // to the same element, which can cause visible stutter in this section.
+    });
+
+    if (isTouch || reducedMotion) return;
+
+    const rotateX = gsap.quickTo(poster, "rotateX", { duration: 0.4, ease: "power2.out" });
+    const rotateY = gsap.quickTo(poster, "rotateY", { duration: 0.4, ease: "power2.out" });
+
+    let trackingActive = false;
+
+    function resetPoster() {
+      rotateX(0);
+      rotateY(0);
+    }
+
+    function onMouseMove(event) {
+      if (!trackingActive) return;
+
+      const rect = posterWrap.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+
+      const dx = (event.clientX - (rect.left + rect.width / 2)) / (rect.width / 2);
+      const dy = (event.clientY - (rect.top + rect.height / 2)) / (rect.height / 2);
+      const maxAngle = 6;
+
+      rotateY(clamp(-1, 1, dx) * maxAngle);
+      rotateX(clamp(-1, 1, -dy) * maxAngle);
+    }
+
+    mainCtx.add(() => {
+      ScrollTrigger.create({
+        trigger: section,
+        start: "top 95%",
+        end: "bottom 5%",
+        onEnter: () => { trackingActive = true; },
+        onLeave: () => { trackingActive = false; resetPoster(); },
+        onEnterBack: () => { trackingActive = true; },
+        onLeaveBack: () => { trackingActive = false; resetPoster(); },
+      });
+
+      const removeMove = addEvent(win, "mousemove", onMouseMove, { passive: true });
+      return () => removeMove();
     });
   }
 
@@ -1384,7 +1516,7 @@
 
           const input = $(".clt-home-subscribe.is-input", form);
           const button = $(".clt-home-subscribe.is-submit", form);
-          const text = button ? $(".clt-button__text", button) : null;
+          const text = button ? $(".clt-button-text", button) : null;
           if (!input || !button || !text) return;
 
           const originalText = text.textContent;
@@ -1403,9 +1535,34 @@
     }
   }
 
-  /* ── Footer — legal modals ────────────────────────────────── */
+  /* ── Footer — entrance + legal modals ────────────────────── */
 
   function initFooter() {
+    const footer = $("#clt-home-footer");
+    if (!footer) return;
+
+    const brand = $(".clt-home-footer.is-brand", footer);
+    const footerNav = $(".clt-home-footer.is-nav", footer);
+    const social = $(".clt-home-footer.is-social", footer);
+    const legal = $(".clt-home-footer.is-legal", footer);
+    const socialLinks = $$(".clt-home-footer.is-social-link", footer);
+
+    mainCtx.add(() => {
+      ScrollTrigger.create({
+        trigger: footer,
+        start: "top 90%",
+        once: true,
+        onEnter() {
+          gsap.timeline()
+            .from(brand, { opacity: 0, y: 20, duration: 0.5, ease: "power2.out", immediateRender: false })
+            .from(footerNav, { opacity: 0, y: 20, duration: 0.4, ease: "power2.out", immediateRender: false }, "-=0.25")
+            .from(social, { opacity: 0, y: 20, duration: 0.4, ease: "power2.out", immediateRender: false }, "-=0.2")
+            .from(socialLinks, { opacity: 0, y: 10, duration: 0.3, stagger: 0.05, ease: "power2.out", immediateRender: false }, "-=0.16")
+            .from(legal, { opacity: 0, y: 20, duration: 0.35, ease: "power2.out", immediateRender: false }, "-=0.15");
+        },
+      });
+    });
+
     initLegalModals();
   }
 
@@ -1493,115 +1650,34 @@
     });
   }
 
-  /* ── Mobile hero — auto-play video, no scroll scrub ─────── */
+  /* ── Smooth anchor links ─────────────────────────────────── */
 
-  /*
-   * Hosted on GitHub Pages (prokhobit/clt-website).
-   */
-  const MOBILE_VIDEO_URL = "https://prokhobit.github.io/clt-website/hero-mobile.mp4";
+  function initSmoothAnchors() {
+    mainCtx.add(() => {
+      const cleanups = $$("[href^='#']").map((anchor) => (
+        addEvent(anchor, "click", (event) => {
+          const href = anchor.getAttribute("href");
+          if (!href || href === "#") return;
 
-  function initMobileHero() {
-    const heroPin = $('[data-gsap="home-hero-pin"]');
-    const hero = $("#clt-home-hero");
-    const canvasWrap = $(".clt-home-hero.is-canvas-wrap", hero);
-    const canvasEl = $("#hero-canvas");
-    const left = $("#clt-home-curtain-left");
-    const right = $("#clt-home-curtain-right");
-    const stage = $('[data-gsap="home-curtain-stage"]');
-    const prompt = $('[data-gsap="home-curtain-prompt"]');
+          const target = doc.getElementById(href.slice(1));
+          if (!target) return;
 
-    if (!hero || !canvasWrap) return;
+          event.preventDefault();
 
-    /* ── 1. Collapse pin wrapper — no scroll distance needed ── */
-    if (heroPin) heroPin.style.height = `${getViewportHeight()}px`;
+          const navShell = $(".clt-navbar-shell");
+          const navOffset = navShell ? -Math.ceil(navShell.getBoundingClientRect().height + 18) : -80;
 
-    /* ── 2. Create video element ───────────────────────────── */
-    const video = doc.createElement("video");
-    video.src = MOBILE_VIDEO_URL;
-    video.muted = true;
-    video.playsInline = true;
-    video.setAttribute("playsinline", "");
-    video.setAttribute("webkit-playsinline", "");
-    video.preload = "auto";
-    video.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;";
+          if (lenis && typeof lenis.scrollTo === "function") {
+            lenis.scrollTo(target, { offset: navOffset, duration: 1.25 });
+          } else {
+            const top = target.getBoundingClientRect().top + win.scrollY + navOffset;
+            win.scrollTo({ top, behavior: reducedMotion ? "auto" : "smooth" });
+          }
+        })
+      ));
 
-    /* Hide the canvas, show the video */
-    if (canvasEl) canvasEl.style.display = "none";
-    canvasWrap.appendChild(video);
-
-    /* ── 3. Build title reveal timeline (paused) ───────────── */
-    const titleTl = buildTitleRevealTimeline();
-    const reveal = $('[data-gsap="home-hero-reveal"]');
-    const cta = $('[data-gsap="home-hero-cta"]');
-
-    /* ── 4. Auto-open curtain + play video on load ─────────── */
-    function startHeroSequence() {
-      const curtainDuration = 1.4;
-
-      /* Animate curtain open */
-      if (left && right && stage) {
-        const openTl = gsap.timeline({
-          onComplete() {
-            stage.style.visibility = "hidden";
-            stage.style.display = "none";
-          },
-        });
-
-        /* Fade out scroll prompt immediately */
-        if (prompt) openTl.to(prompt, { opacity: 0, duration: 0.3 }, 0);
-
-        openTl.to(left, {
-          xPercent: -110,
-          scaleX: 0.72,
-          duration: curtainDuration,
-          ease: "power2.inOut",
-          force3D: true,
-        }, 0);
-
-        openTl.to(right, {
-          xPercent: 110,
-          scaleX: 0.72,
-          duration: curtainDuration,
-          ease: "power2.inOut",
-          force3D: true,
-        }, 0);
-      } else if (stage) {
-        stage.style.display = "none";
-      }
-
-      /* Start video playback */
-      video.play().catch(() => {
-        /* Autoplay blocked — show first frame and reveal title immediately */
-        if (titleTl) titleTl.progress(1);
-        if (reveal) reveal.style.pointerEvents = "auto";
-        if (cta) cta.style.pointerEvents = "auto";
-      });
-
-      /* Reveal title partway through the video */
-      const titleDelay = curtainDuration + 3.8;
-      gsap.delayedCall(titleDelay, () => {
-        if (titleTl) {
-          titleTl.timeScale(1).play();
-          titleTl.eventCallback("onComplete", () => {
-            if (reveal) reveal.style.pointerEvents = "auto";
-            if (cta) cta.style.pointerEvents = "auto";
-          });
-        }
-      });
-    }
-
-    /* Wait for video to have enough data, then start */
-    if (video.readyState >= 3) {
-      startHeroSequence();
-    } else {
-      video.addEventListener("canplaythrough", startHeroSequence, { once: true });
-      /* Fallback if video is slow to buffer */
-      win.setTimeout(() => {
-        if (!video.paused) return; /* already started */
-        startHeroSequence();
-      }, 3000);
-    }
-
+      return () => cleanups.forEach((cleanup) => cleanup());
+    });
   }
 
   /* ── Entry point ─────────────────────────────────────────── */
@@ -1616,29 +1692,25 @@
     mainCtx = gsap.context(() => {}, doc.documentElement);
     initMobileViewportLock();
 
-    if (isMobileLike && !reducedMotion) {
-      /* Mobile: auto-play video hero — no scroll scrub, no frame loading */
-      initMobileHero();
-    } else {
-      /* Desktop: full scroll-scrubbed frame sequence */
-      initHeroCanvas();
+    initHeroCanvas();
+    initLenis();
 
-      if (reducedMotion) {
-        showReducedHero();
-      } else {
-        initScrollScrub();
-        initCurtain();
-      }
+    if (reducedMotion) {
+      showReducedHero();
+    } else {
+      initScrollScrub();
+      initCurtain();
     }
 
-    initLenis();
     initDust();
     initSectionParallax();
     initMarquee();
     initExploreCarousel();
+    initUpcomingEvents();
     initPastPerformances();
     initSubscribeDonate();
     initFooter();
+    initSmoothAnchors();
     refreshWhenLayoutSettles();
   }
 
