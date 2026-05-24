@@ -597,8 +597,10 @@
       ScrollTrigger.create({
         trigger: heroPin,
         start: "top top",
+         pin:true,
         end: "bottom bottom",
         scrub: true,
+         
         invalidateOnRefresh: true,
         onUpdate(self) {
           drawFrame(self.progress * (FRAME_COUNT - 1));
@@ -628,7 +630,6 @@
     const lines = $$('[data-gsap="home-hero-line"]');
     const titleLines = lines.filter((element) => !element.classList.contains("presents"));
     const presents = lines.filter((element) => element.classList.contains("presents"));
-    const cta = $('[data-gsap="home-hero-cta"]');
     const targets = [eyebrow, ...titleLines, ...presents, cta].filter(Boolean);
 
     if (!targets.length) return null;
@@ -649,7 +650,7 @@
   function showReducedHero() {
     loadFrame(0).then(() => drawFrame(0));
 
-    $$('[data-gsap="home-hero-line"], [data-gsap="home-hero-eyebrow"], [data-gsap="home-hero-cta"]').forEach((element) => {
+    $$('[data-gsap="home-hero-line"], [data-gsap="home-hero-eyebrow"]').forEach((element) => {
       gsap.set(element, { opacity: 1, y: 0, clearProps: "transform" });
     });
 
@@ -977,8 +978,8 @@
     mainCtx.add(() => {
       sections.forEach((section) => {
         const kicker = $(".clt-eyebrow", section);
-        const title = $(".clt-home-explore.is-title, .clt-home-upcoming.is-title, .clt-home-past.is-title, .clt-home-subscribe.is-title", section);
-        const subtitle = $(".clt-home-upcoming.is-subtitle, .clt-home-past.is-subtitle, .clt-home-subscribe.is-desc", section);
+        const title = $(".clt-home-explore.is-title, .clt-home-past.is-title, .clt-home-subscribe.is-title", section);
+        const subtitle = $(".clt-home-past.is-subtitle, .clt-home-subscribe.is-desc", section);
 
         if (kicker) {
           gsap.fromTo(kicker, { y: 30, opacity: 0 }, {
@@ -1116,7 +1117,7 @@
     const trackMask = $("#explore-mask");
     if (!section || !track || !trackMask) return;
 
-    const originalCards = $$(".clt-home-explore.card", track).filter((card) => card.dataset.clone !== "true");
+    const originalCards = $$(".clt-home-explore.is-card", track).filter((card) => card.dataset.clone !== "true");
     if (!originalCards.length) return;
 
     if (!track.dataset.clonesReady) {
@@ -1370,9 +1371,9 @@
     const form = $("#subscribe-form");
     if (!section || !trigger || !panel) return;
 
-    const header = $(".clt-home-subscribe.copy", section);
+    const header = $(".clt-home-subscribe.is-copy", section);
     const formEl = $(".clt-home-subscribe.is-form", section);
-    const donateWrap = $(".clt-home-subscribe.donate-wrap", section);
+    const donateWrap = $(".clt-home-subscribe.is-donate-wrap", section);
 
     mainCtx.add(() => {
       ScrollTrigger.create({
@@ -1443,9 +1444,9 @@
     mainCtx.add(() => {
       const removeClick = addEvent(trigger, "click", () => setDonateOpen(!isOpen));
 
-      const amountCleanups = $$(".clt-home-subscribe.donate-amt", panel).map((button) => (
+      const amountCleanups = $$(".clt-home-subscribe.is-donate-amt", panel).map((button) => (
         addEvent(button, "click", () => {
-          $$(".clt-home-subscribe.donate-amt", panel).forEach((item) => item.classList.remove("clt-state-active"));
+          $$(".clt-home-subscribe.is-donate-amt", panel).forEach((item) => item.classList.remove("clt-state-active"));
           button.classList.add("clt-state-active");
         })
       ));
