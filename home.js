@@ -597,7 +597,7 @@
       ScrollTrigger.create({
         trigger: heroPin,
         start: "top top",
-         pin:true,
+        pin: true,
         end: "bottom bottom",
         scrub: true,
          
