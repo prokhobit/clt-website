@@ -977,8 +977,8 @@
     mainCtx.add(() => {
       sections.forEach((section) => {
         const kicker = $(".clt-eyebrow", section);
-        const title = $(".clt-home-explore.title, .clt-home-upcoming.title, .clt-home-past.title, .clt-home-subscribe.title", section);
-        const subtitle = $(".clt-home-upcoming.subtitle, .clt-home-past.subtitle, .clt-home-subscribe.desc", section);
+        const title = $(".clt-home-explore.is-title, .clt-home-upcoming.is-title, .clt-home-past.is-title, .clt-home-subscribe.is-title", section);
+        const subtitle = $(".clt-home-upcoming.is-subtitle, .clt-home-past.is-subtitle, .clt-home-subscribe.is-desc", section);
 
         if (kicker) {
           gsap.fromTo(kicker, { y: 30, opacity: 0 }, {
@@ -1049,9 +1049,9 @@
   /* ── Marquee — scroll-direction aware ────────────────────── */
 
   function initMarquee() {
-    const track = $(".clt-home-marquee.track");
+    const track = $(".clt-home-marquee.is-track");
     const section = $('[data-webflow-section="acclaim-marquee"]');
-    const firstSet = $(".clt-home-marquee.set", track || doc);
+    const firstSet = $(".clt-home-marquee.is-set", track || doc);
     if (!track || !section || !firstSet) return;
 
     track.style.animation = "none";
@@ -1310,8 +1310,8 @@
     const scrollWrap = $("#past-scroll-wrap");
     if (!section || !track || !scrollWrap) return;
 
-    const cards = $$(".clt-home-past.card", section);
-    const header = $(".clt-home-past.header", section);
+    const cards = $$(".clt-home-past.is-card", section);
+    const header = $(".clt-home-past.is-header", section);
 
     mainCtx.add(() => {
       ScrollTrigger.create({
@@ -1371,7 +1371,7 @@
     if (!section || !trigger || !panel) return;
 
     const header = $(".clt-home-subscribe.copy", section);
-    const formEl = $(".clt-home-subscribe.form", section);
+    const formEl = $(".clt-home-subscribe.is-form", section);
     const donateWrap = $(".clt-home-subscribe.donate-wrap", section);
 
     mainCtx.add(() => {
@@ -1461,8 +1461,8 @@
         const removeSubmit = addEvent(form, "submit", (event) => {
           event.preventDefault();
 
-          const input = $(".clt-home-subscribe.input", form);
-          const button = $(".clt-home-subscribe.submit", form);
+          const input = $(".clt-home-subscribe.is-input", form);
+          const button = $(".clt-home-subscribe.is-submit", form);
           const text = button ? $(".clt-button__text", button) : null;
           if (!input || !button || !text) return;
 
@@ -1502,8 +1502,8 @@
       modal.classList.add("clt-state-open");
       modal.setAttribute("aria-hidden", "false");
 
-      const panel = $(".clt-home-legal-modal.panel", modal);
-      const backdrop = $(".clt-home-legal-modal.backdrop", modal);
+      const panel = $(".clt-home-legal-modal.is-panel", modal);
+      const backdrop = $(".clt-home-legal-modal.is-backdrop", modal);
 
       gsap.fromTo(backdrop, { opacity: 0 }, { opacity: 1, duration: 0.32, ease: "power2.out" });
       gsap.fromTo(panel, {
@@ -1531,8 +1531,8 @@
     function closeModal(modal) {
       if (!modal) return;
 
-      const panel = $(".clt-home-legal-modal.panel", modal);
-      const backdrop = $(".clt-home-legal-modal.backdrop", modal);
+      const panel = $(".clt-home-legal-modal.is-panel", modal);
+      const backdrop = $(".clt-home-legal-modal.is-backdrop", modal);
 
       gsap.to(panel, { scale: 0.97, y: 14, opacity: 0, duration: 0.26, ease: "power2.in" });
       gsap.to(backdrop, {
@@ -1582,7 +1582,7 @@
   function initMobileHero() {
     const heroPin = $('[data-gsap="home-hero-pin"]');
     const hero = $("#clt-home-hero");
-    const canvasWrap = $(".clt-home-hero.canvas-wrap", hero);
+    const canvasWrap = $(".clt-home-hero.is-canvas-wrap", hero);
     const canvasEl = $("#hero-canvas");
     const left = $("#clt-home-curtain-left");
     const right = $("#clt-home-curtain-right");
@@ -1715,7 +1715,6 @@
     initSectionParallax();
     initMarquee();
     initExploreCarousel();
-    initUpcomingEvents();
     initPastPerformances();
     initSubscribeDonate();
     initFooter();
