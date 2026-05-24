@@ -1,7 +1,4 @@
-/* ============================================================
-   Commonwealth Lyric Theater — home.js
-   Webflow native GSAP build: ScrollTrigger/Draggable/Lenis interactions
-   ============================================================ */
+ 
 
 (() => {
   "use strict";
