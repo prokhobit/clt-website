@@ -597,10 +597,8 @@
       ScrollTrigger.create({
         trigger: heroPin,
         start: "top top",
-        pin: true,
         end: "bottom bottom",
         scrub: true,
-         
         invalidateOnRefresh: true,
         onUpdate(self) {
           drawFrame(self.progress * (FRAME_COUNT - 1));
