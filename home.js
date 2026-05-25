@@ -10,17 +10,16 @@
   let Lenis = win.Lenis;
 
   const SELECTOR = {
-    heroSection: ".clt-home-hero",
+    heroSection: "#clt-home-hero",
     heroPin: '[data-gsap="home-hero-pin"]',
     heroCanvas: "#hero-canvas",
-    heroReveal: ".clt-home-hero.is-reveal-line",
-    heroEyebrow: ".clt-home-hero.is-reveal-eyebrow",
-    heroLine: ".clt-home-hero.is-line",
-    heroCta: ".clt-home-hero.is-cta",
+    heroReveal: '[data-gsap="home-hero-reveal"]',
+    heroEyebrow: '[data-gsap="home-hero-eyebrow"]',
+    heroLine: '[data-gsap="home-hero-line"]',
 
     curtainStage: ".clt-home-curtain-stage",
-    curtainLeft: ".clt-home-curtain-left",
-    curtainRight: ".clt-home-curtain-right",
+    curtainLeft: "#clt-home-curtain-left",
+    curtainRight: "#clt-home-curtain-right",
     curtainPrompt: ".clt-home-curtain-prompt",
     curtainPanelTop: ".clt-home-curtain-panel-top",
 
