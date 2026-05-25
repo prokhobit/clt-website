@@ -1367,36 +1367,6 @@
     });
   }
 
-  /* ── Smooth anchor links ─────────────────────────────────── */
-
-  function initSmoothAnchors() {
-    mainCtx.add(() => {
-      const cleanups = $$("[href^='#']").map((anchor) => (
-        addEvent(anchor, "click", (event) => {
-          const href = anchor.getAttribute("href");
-          if (!href || href === "#") return;
-
-          const target = doc.getElementById(href.slice(1));
-          if (!target) return;
-
-          event.preventDefault();
-
-          const navShell = $(".clt-navbar-shell");
-          const navOffset = navShell ? -Math.ceil(navShell.getBoundingClientRect().height + 18) : -80;
-
-          if (lenis && typeof lenis.scrollTo === "function") {
-            lenis.scrollTo(target, { offset: navOffset, duration: 1.25 });
-          } else {
-            const top = target.getBoundingClientRect().top + win.scrollY + navOffset;
-            win.scrollTo({ top, behavior: reducedMotion ? "auto" : "smooth" });
-          }
-        })
-      ));
-
-      return () => cleanups.forEach((cleanup) => cleanup());
-    });
-  }
-
   /* ── Entry point ─────────────────────────────────────────── */
 
   function init() {
@@ -1423,12 +1393,8 @@
     initSectionParallax();
     initMarquee();
     initExploreCarousel();
-    initUpcomingEvents();
     initPastPerformances();
-    initSubscribeDonate();
     initFooter();
-    initSmoothAnchors();
-    refreshWhenLayoutSettles();
   }
 
   function startWhenReady() {
