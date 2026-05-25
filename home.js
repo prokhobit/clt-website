@@ -10,11 +10,11 @@
   let Lenis = win.Lenis;
 
   const SELECTOR = {
-    heroSection: ".clt-home-hero.is-section",
-    heroPin: ".clt-home-hero.is-pin",
-    heroCanvas: ".hero-canvas",
-    heroReveal: ".clt-home-hero.is-reveal",
-    heroEyebrow: ".clt-home-hero.is-eyebrow",
+    heroSection: ".clt-home-hero",
+    heroPin: '[data-gsap="home-hero-pin"]',
+    heroCanvas: "#hero-canvas",
+    heroReveal: ".clt-home-hero.is-reveal-line",
+    heroEyebrow: ".clt-home-hero.is-reveal-eyebrow",
     heroLine: ".clt-home-hero.is-line",
     heroCta: ".clt-home-hero.is-cta",
 
@@ -31,11 +31,11 @@
     dustParticle: ".clt-home-dust.is-particle",
     page: ".clt-page",
 
-    marqueeSection: ".clt-home-marquee.is-section",
+    marqueeSection: ".clt-home-marquee",
     marqueeTrack: ".clt-home-marquee.is-track",
     marqueeSet: ".clt-home-marquee.is-set",
 
-    exploreSection: ".clt-home-explore.is-section",
+    exploreSection: ".clt-home-explore",
     exploreMask: ".clt-home-explore.is-mask",
     exploreTrack: ".clt-home-explore.is-track",
     exploreCard: ".clt-home-explore.is-card",
