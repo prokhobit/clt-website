@@ -24,7 +24,7 @@
     curtainPrompt: ".clt-home-curtain.is-prompt",
     curtainPanelTop: ".clt-home-curtain.is-panel-top",
 
-    dustRoot: "#star-container.clt-home-dust",
+    dustRoot: "#star-container",
     dustFar: ".clt-home-dust.is-far",
     dustMid: ".clt-home-dust.is-mid",
     dustNear: ".clt-home-dust.is-near",
