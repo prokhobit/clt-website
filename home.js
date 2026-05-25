@@ -18,16 +18,16 @@
     heroLine: ".clt-home-hero.is-line",
     heroCta: ".clt-home-hero.is-cta",
 
-    curtainStage: ".clt-home-curtain.is-stage",
-    curtainLeft: ".clt-home-curtain.is-left",
-    curtainRight: ".clt-home-curtain.is-right",
-    curtainPrompt: ".clt-home-curtain.is-prompt",
-    curtainPanelTop: ".clt-home-curtain.is-panel-top",
+    curtainStage: ".clt-home-curtain-stage",
+    curtainLeft: ".clt-home-curtain-left",
+    curtainRight: ".clt-home-curtain-right",
+    curtainPrompt: ".clt-home-curtain-prompt",
+    curtainPanelTop: ".clt-home-curtain-panel-top",
 
     dustRoot: "#star-container",
-    dustFar: ".clt-home-dust.is-far",
-    dustMid: ".clt-home-dust.is-mid",
-    dustNear: ".clt-home-dust.is-near",
+    dustFar: "#dust-far",
+    dustMid: "#dust-mid",
+    dustNear: "#dust-near",
     dustParticle: ".clt-home-dust.is-particle",
     page: ".clt-page",
 
@@ -479,8 +479,8 @@
   function buildHeroTitleTimeline() {
     const eyebrow = query(SELECTOR.heroEyebrow);
     const lines = queryAll(SELECTOR.heroLine);
-    const titleLines = lines.filter((line) => !line.classList.contains("is-presents"));
-    const presents = lines.filter((line) => line.classList.contains("is-presents"));
+    const titleLines = lines.filter((line) => !line.classList.contains("is-reveal-line"));
+    const presents = lines.filter((line) => line.classList.contains("is-reveal-line"));
     const cta = query(SELECTOR.heroCta);
     const targets = [eyebrow, ...titleLines, ...presents, cta].filter(Boolean);
 
