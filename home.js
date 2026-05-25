@@ -1,3 +1,4 @@
+
 (() => {
   "use strict";
 
@@ -10,18 +11,20 @@
   let Lenis = win.Lenis;
 
   const SELECTOR = {
+    // Matched to commonwealth-lyric-webflow.html.
     heroSection: "#clt-home-hero",
     heroPin: '[data-gsap="home-hero-pin"]',
     heroCanvas: "#hero-canvas",
     heroReveal: '[data-gsap="home-hero-reveal"]',
     heroEyebrow: '[data-gsap="home-hero-eyebrow"]',
     heroLine: '[data-gsap="home-hero-line"]',
+    heroCta: '[data-gsap="home-hero-cta"]',
 
-    curtainStage: ".clt-home-curtain-stage",
+    curtainStage: '[data-gsap="home-curtain-stage"]',
     curtainLeft: "#clt-home-curtain-left",
     curtainRight: "#clt-home-curtain-right",
-    curtainPrompt: ".clt-home-curtain-prompt",
-    curtainPanelTop: ".clt-home-curtain-panel-top",
+    curtainPrompt: '[data-gsap="home-curtain-prompt"]',
+    curtainPanelTop: '[data-gsap="home-curtain-panel-top"]',
 
     dustRoot: "#star-container",
     dustFar: "#dust-far",
@@ -30,7 +33,7 @@
     dustParticle: ".clt-home-dust.is-particle",
     page: ".clt-page",
 
-    marqueeSection: ".clt-home-marquee",
+    marqueeSection: '[data-webflow-section="acclaim-marquee"]',
     marqueeTrack: ".clt-home-marquee.is-track",
     marqueeSet: ".clt-home-marquee.is-set",
 
@@ -38,7 +41,7 @@
     exploreMask: "#explore-mask",
     exploreTrack: "#explore-track",
     exploreCard: ".clt-home-explore.is-card",
-    exploreLens: ".clt-home-carousel-lens",
+    exploreLens: "#clt-home-carousel-lens",
   };
 
   const FRAME_URLS = [
@@ -478,8 +481,8 @@
   function buildHeroTitleTimeline() {
     const eyebrow = query(SELECTOR.heroEyebrow);
     const lines = queryAll(SELECTOR.heroLine);
-    const titleLines = lines.filter((line) => !line.classList.contains("is-reveal-line"));
-    const presents = lines.filter((line) => line.classList.contains("is-reveal-line"));
+    const titleLines = lines.filter((line) => !line.classList.contains("is-presents"));
+    const presents = lines.filter((line) => line.classList.contains("is-presents"));
     const cta = query(SELECTOR.heroCta);
     const targets = [eyebrow, ...titleLines, ...presents, cta].filter(Boolean);
 
@@ -900,6 +903,38 @@
     }
   }
 
+  function initHeroPinGuard() {
+    const hero = query(SELECTOR.heroSection);
+    const heroPin = query(SELECTOR.heroPin);
+    if (!hero || !heroPin) return;
+
+    const pinMultiplier = parseFloat(win.getComputedStyle(doc.documentElement).getPropertyValue("--pin-multiplier")) || 5;
+    const viewportHeight = Math.max(1, win.innerHeight || doc.documentElement.clientHeight || 1);
+    const minimumPinHeight = Math.round(viewportHeight * pinMultiplier);
+
+    // Sticky pinning will fail if a parent clips/scrolls the sticky context.
+    // Your uploaded HTML had an earlier .clt-page overflow rule, so this keeps
+    // the page wrapper from blocking the hero's sticky behavior.
+    const page = query(SELECTOR.page);
+    if (page) {
+      const pageStyles = win.getComputedStyle(page);
+      const overflowY = pageStyles.overflowY;
+      const overflow = pageStyles.overflow;
+
+      if (overflowY === "clip" || overflowY === "hidden" || overflow === "clip" || overflow === "hidden") {
+        page.style.overflow = "visible";
+      }
+    }
+
+    heroPin.style.overflow = "visible";
+    heroPin.style.minHeight = `${minimumPinHeight}px`;
+
+    hero.style.position = "sticky";
+    hero.style.top = "0";
+    hero.style.minHeight = "calc(var(--clt-js-vh, 1vh) * 100)";
+    hero.style.overflow = "hidden";
+  }
+
   function initMarquee() {
     const track = query(SELECTOR.marqueeTrack);
     const section = query(SELECTOR.marqueeSection) || (track && track.closest(SELECTOR.marqueeSection));
@@ -1135,65 +1170,80 @@
 
   function initExploreLens(mask, track) {
     const lens = query(SELECTOR.exploreLens);
-    if (!lens || isTouch || reducedMotion) return;
+    if (!lens || !mask || isTouch) return;
 
-    gsap.set(lens, { xPercent: -50, yPercent: -50, scale: 0.9, autoAlpha: 0 });
+    gsap.set(lens, {
+      xPercent: -50,
+      yPercent: -50,
+      rotation: 0,
+      scale: 1,
+      autoAlpha: 0,
+      pointerEvents: "none",
+      zIndex: 9999,
+    });
 
-    const moveX = gsap.quickTo(lens, "left", { duration: 0.16, ease: "power3.out" });
-    const moveY = gsap.quickTo(lens, "top", { duration: 0.16, ease: "power3.out" });
-    const rotate = gsap.quickTo(lens, "rotation", { duration: 0.24, ease: "power3.out" });
+    const moveX = gsap.quickTo(lens, "left", { duration: 0.12, ease: "power2.out" });
+    const moveY = gsap.quickTo(lens, "top", { duration: 0.12, ease: "power2.out" });
+    const rotate = gsap.quickTo(lens, "rotation", { duration: 0.2, ease: "power3.out" });
 
     let isOver = false;
     let isDown = false;
     let lastX = 0;
 
-    const render = () => {
-      lens.classList.toggle("clt-state-visible", isOver);
-      lens.classList.toggle("clt-state-dragging", isDown);
-
-      gsap.to(lens, {
-        autoAlpha: isOver ? 1 : 0,
-        scale: isDown ? 0.78 : 1,
-        duration: 0.22,
-        overwrite: true,
-      });
+    const show = () => {
+      lens.classList.remove("clt-home-is-hidden");
+      lens.classList.add("clt-state-visible");
+      gsap.to(lens, { autoAlpha: 1, scale: isDown ? 0.82 : 1, duration: 0.18, overwrite: true });
     };
 
-    listen(mask, "pointerenter", () => {
-      isOver = true;
-      render();
-    });
-
-    listen(mask, "pointerleave", () => {
+    const hide = () => {
       isOver = false;
       isDown = false;
+      lens.classList.remove("clt-state-visible", "clt-state-dragging", "clt-home-is-hidden");
       rotate(0);
-      render();
-    });
+      gsap.to(lens, { autoAlpha: 0, scale: 0.9, duration: 0.18, overwrite: true });
+    };
 
-    listen(mask, "pointermove", (event) => {
+    const move = (event) => {
       const deltaX = event.clientX - lastX;
       lastX = event.clientX;
 
       moveX(event.clientX);
       moveY(event.clientY);
-      rotate(clamp(-12, 12, deltaX * 0.4));
+
+      if (isOver) rotate(clamp(-12, 12, deltaX * 0.35));
+    };
+
+    listen(mask, "pointerenter", (event) => {
+      isOver = true;
+      lastX = event.clientX;
+      move(event);
+      show();
+    });
+
+    listen(mask, "pointermove", (event) => {
+      if (!isOver) {
+        isOver = true;
+        show();
+      }
+
+      move(event);
     }, { passive: true });
 
-    listen(mask, "pointerdown", () => {
+    listen(mask, "pointerleave", hide);
+
+    listen(mask, "pointerdown", (event) => {
       isDown = true;
-      render();
+      lens.classList.add("clt-state-dragging");
+      move(event);
+      show();
     });
 
     listen(win, "pointerup", () => {
       if (!isDown) return;
       isDown = false;
-      render();
-    });
-
-    queryAll(SELECTOR.exploreCard, track).forEach((card) => {
-      listen(card, "pointerenter", () => lens.classList.add("clt-home-is-hidden"));
-      listen(card, "pointerleave", () => lens.classList.remove("clt-home-is-hidden"));
+      lens.classList.remove("clt-state-dragging");
+      if (isOver) show();
     });
   }
 
@@ -1224,6 +1274,7 @@
     const modules = [
       { name: "Lenis", init: initLenis },
       { name: "Mobile viewport lock", init: initMobileViewportLock },
+      { name: "Hero pin guard", init: initHeroPinGuard },
       { name: "Hero canvas", init: initHeroCanvas },
       { name: "Reduced hero", init: showReducedHero, enabled: reducedMotion },
       { name: "Hero scrub", init: initHeroScrub, enabled: !reducedMotion },
@@ -1287,3 +1338,4 @@
     startWhenReady();
   }
 })();
+</script>
