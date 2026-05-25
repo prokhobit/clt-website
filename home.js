@@ -1390,7 +1390,6 @@
     }
 
     initDust();
-    initSectionParallax();
     initMarquee();
     initExploreCarousel();
     initPastPerformances();
