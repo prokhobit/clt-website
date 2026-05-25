@@ -1,23 +1,46 @@
- 
-
 (() => {
   "use strict";
 
   const win = window;
   const doc = document;
+
   let gsap = win.gsap;
   let ScrollTrigger = win.ScrollTrigger;
   let Draggable = win.Draggable;
   let Lenis = win.Lenis;
 
-  const TITLE_REVEAL_AT = 0.68;
-  const TITLE_REVEAL_END = 0.91;
-  const DUST_DENSITY = 1.32;
-  const reducedMotion = win.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const isTouch = win.matchMedia("(pointer: coarse)").matches;
-  const isSmallViewport = win.matchMedia("(max-width: 760px)").matches;
-  const isMobileLike = isTouch || isSmallViewport;
-  const FRAME_STEP = isMobileLike ? 3 : 1;
+  const SELECTOR = {
+    heroSection: ".clt-home-hero.is-section",
+    heroPin: ".clt-home-hero.is-pin",
+    heroCanvas: ".hero-canvas",
+    heroReveal: ".clt-home-hero.is-reveal",
+    heroEyebrow: ".clt-home-hero.is-eyebrow",
+    heroLine: ".clt-home-hero.is-line",
+    heroCta: ".clt-home-hero.is-cta",
+
+    curtainStage: ".clt-home-curtain.is-stage",
+    curtainLeft: ".clt-home-curtain.is-left",
+    curtainRight: ".clt-home-curtain.is-right",
+    curtainPrompt: ".clt-home-curtain.is-prompt",
+    curtainPanelTop: ".clt-home-curtain.is-panel-top",
+
+    dustRoot: ".clt-home-dust.is-root",
+    dustFar: ".clt-home-dust.is-far",
+    dustMid: ".clt-home-dust.is-mid",
+    dustNear: ".clt-home-dust.is-near",
+    dustParticle: ".clt-home-dust.is-particle",
+    page: ".clt-page",
+
+    marqueeSection: ".clt-home-marquee.is-section",
+    marqueeTrack: ".clt-home-marquee.is-track",
+    marqueeSet: ".clt-home-marquee.is-set",
+
+    exploreSection: ".clt-home-explore.is-section",
+    exploreMask: ".clt-home-explore.is-mask",
+    exploreTrack: ".clt-home-explore.is-track",
+    exploreCard: ".clt-home-explore.is-card",
+    exploreLens: ".clt-home-carousel-lens",
+  };
 
   const FRAME_URLS = [
     "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a35ad19668aae30c2f4_frame-0001.avif",
@@ -263,159 +286,374 @@
     "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a54e1517a752ec189bc_frame-0247.avif",
     "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a540030b57ecf440576_frame-0248.avif",
     "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a54f29cfaca54deb5e2_frame-0249.avif",
-    "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a54f4eec82dd5e0fca3_frame-0250.avif",
-  ];
+    "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a54f4eec82dd5e0fca3_frame-0250.avif"
+];
 
-  const FRAME_COUNT = FRAME_URLS.length;
+  const reducedMotion = win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const isTouch = win.matchMedia("(pointer: coarse)").matches;
+  const isSmallViewport = win.matchMedia("(max-width: 760px)").matches;
+  const isMobileLike = isTouch || isSmallViewport;
+  const frameStep = isMobileLike ? 3 : 1;
+
+  const frameCount = FRAME_URLS.length;
+  const titleRevealStart = 0.66;
+  const titleRevealEnd = 0.92;
+  const dustDensity = 1.32;
+
   const clamp = (min, max, value) => Math.min(max, Math.max(min, value));
   const random = (min, max) => min + Math.random() * (max - min);
+  const query = (selector, scope = doc) => scope.querySelector(selector);
+  const queryAll = (selector, scope = doc) => Array.from(scope.querySelectorAll(selector));
 
-  let lenis = null;
-  let mainCtx = null;
-  let canvas = null;
-  let canvasContext = null;
-  let resizeObserver = null;
-  let frames = new Array(FRAME_COUNT);
-  let framePromises = new Array(FRAME_COUNT);
-  let currentFrameIndex = 0;
-  let lastKnownScroll = 0;
-  let lastKnownVelocity = 0;
-  let refreshTimer = 0;
-  let didUserScroll = false;
-  let refreshGateUnlocked = false;
-  let lockedViewportWidth = 0;
-  let lockedViewportHeight = 0;
-
-  const $ = (selector, scope = doc) => scope.querySelector(selector);
-  const $$ = (selector, scope = doc) => Array.from(scope.querySelectorAll(selector));
-
-  function addEvent(target, type, handler, options) {
-    if (!target || !target.addEventListener) return () => {};
+  const cleanups = [];
+  const listen = (target, type, handler, options) => {
+    if (!target || !target.addEventListener) return () => undefined;
     target.addEventListener(type, handler, options);
-    return () => target.removeEventListener(type, handler, options);
-  }
+    const cleanup = () => target.removeEventListener(type, handler, options);
+    cleanups.push(cleanup);
+    return cleanup;
+  };
 
-  function normalizeFrameIndex(index) {
+  let mainContext = null;
+  let heroCanvas = null;
+  let heroCanvasContext = null;
+  let resizeObserver = null;
+  let currentFrame = 0;
+  let lenis = null;
+  let lastKnownVelocity = 0;
+
+  const frames = new Array(frameCount);
+  const framePromises = new Array(frameCount);
+
+  function normalizedFrame(index) {
     const rounded = Math.round(index);
-    if (FRAME_STEP <= 1) return clamp(0, FRAME_COUNT - 1, rounded);
-    return clamp(0, FRAME_COUNT - 1, Math.round(rounded / FRAME_STEP) * FRAME_STEP);
+    if (frameStep === 1) return clamp(0, frameCount - 1, rounded);
+    return clamp(0, frameCount - 1, Math.round(rounded / frameStep) * frameStep);
   }
 
-  function getViewportHeight() {
-    return Math.round((win.visualViewport && win.visualViewport.height) || win.innerHeight || 1);
-  }
+  function loadFrame(index) {
+    const safeIndex = normalizedFrame(index);
 
-  function getViewportWidth() {
-    return Math.round((win.visualViewport && win.visualViewport.width) || win.innerWidth || 1);
-  }
+    if (frames[safeIndex]) return Promise.resolve(frames[safeIndex]);
+    if (framePromises[safeIndex]) return framePromises[safeIndex];
 
-  function syncMobileViewport(force = false) {
-    if (!isMobileLike) return false;
-
-    const width = getViewportWidth();
-    const height = getViewportHeight();
-    const widthChanged = Math.abs(width - lockedViewportWidth) > 24;
-
-    if (!force && lockedViewportHeight && !widthChanged) return false;
-
-    lockedViewportWidth = width;
-    lockedViewportHeight = height;
-
-    doc.documentElement.style.setProperty("--clt-js-vh", `${height * 0.01}px`);
-
-    const heroPin = $('[data-gsap="home-hero-pin"]');
-    const hero = $("#clt-home-hero");
-    const pinMultiplier = parseFloat(win.getComputedStyle(doc.documentElement).getPropertyValue("--pin-multiplier")) || 3;
-
-    if (hero) hero.style.height = `${height}px`;
-    if (heroPin) heroPin.style.height = `${Math.round(height * pinMultiplier)}px`;
-
-    resizeCanvas();
-    return true;
-  }
-
-  function initMobileViewportLock() {
-    if (!isMobileLike) return;
-
-    syncMobileViewport(true);
-
-    mainCtx.add(() => {
-      let timer = 0;
-
-      const schedule = (force = false) => {
-        win.clearTimeout(timer);
-        timer = win.setTimeout(() => {
-          if (syncMobileViewport(force)) requestRefresh(140, true);
-        }, 120);
+    framePromises[safeIndex] = new Promise((resolve) => {
+      const image = new Image();
+      image.decoding = "async";
+      image.onload = () => {
+        frames[safeIndex] = image;
+        resolve(image);
       };
+      image.onerror = () => resolve(null);
+      image.src = FRAME_URLS[safeIndex];
+    });
 
-      const cleanups = [
-        addEvent(win, "orientationchange", () => schedule(true), { passive: true }),
-        addEvent(win, "resize", () => {
-          const widthChanged = Math.abs(getViewportWidth() - lockedViewportWidth) > 24;
-          if (widthChanged) schedule(true);
-        }, { passive: true }),
-      ];
+    return framePromises[safeIndex];
+  }
 
-      if (win.visualViewport) {
-        cleanups.push(addEvent(win.visualViewport, "resize", () => {
-          const widthChanged = Math.abs(getViewportWidth() - lockedViewportWidth) > 24;
-          if (widthChanged) schedule(true);
-        }, { passive: true }));
-      }
+  function closestLoadedFrame(index) {
+    if (frames[index]) return index;
 
-      return () => {
-        win.clearTimeout(timer);
-        cleanups.forEach((cleanup) => cleanup());
-      };
+    for (let distance = 1; distance < frameCount; distance += 1) {
+      const before = index - distance;
+      const after = index + distance;
+
+      if (before >= 0 && frames[before]) return before;
+      if (after < frameCount && frames[after]) return after;
+    }
+
+    return -1;
+  }
+
+  function drawFrame(index) {
+    if (!heroCanvas || !heroCanvasContext || !frameCount) return;
+
+    const safeIndex = normalizedFrame(index);
+    currentFrame = safeIndex;
+
+    if (!frames[safeIndex]) {
+      loadFrame(safeIndex).then(() => {
+        if (currentFrame === safeIndex) drawFrame(safeIndex);
+      });
+    }
+
+    const drawableIndex = closestLoadedFrame(safeIndex);
+    if (drawableIndex < 0) return;
+
+    const image = frames[drawableIndex];
+    if (!image || !image.naturalWidth || !image.naturalHeight) return;
+
+    const canvasWidth = heroCanvas.width;
+    const canvasHeight = heroCanvas.height;
+    const scale = Math.max(canvasWidth / image.naturalWidth, canvasHeight / image.naturalHeight);
+    const width = image.naturalWidth * scale;
+    const height = image.naturalHeight * scale;
+
+    heroCanvasContext.clearRect(0, 0, canvasWidth, canvasHeight);
+    heroCanvasContext.drawImage(
+      image,
+      (canvasWidth - width) / 2,
+      (canvasHeight - height) / 2,
+      width,
+      height
+    );
+  }
+
+  function resizeHeroCanvas() {
+    if (!heroCanvas || !heroCanvasContext) return;
+
+    const rect = heroCanvas.getBoundingClientRect();
+    const dpr = Math.min(win.devicePixelRatio || 1, isMobileLike ? 1.25 : 2);
+    const width = Math.max(1, Math.round(rect.width * dpr));
+    const height = Math.max(1, Math.round(rect.height * dpr));
+
+    if (heroCanvas.width !== width || heroCanvas.height !== height) {
+      heroCanvas.width = width;
+      heroCanvas.height = height;
+    }
+
+    drawFrame(currentFrame);
+  }
+
+  function scheduleIdle(callback) {
+    if ("requestIdleCallback" in win) {
+      win.requestIdleCallback(callback, { timeout: 350 });
+      return;
+    }
+
+    win.setTimeout(callback, 80);
+  }
+
+  function preloadFrames() {
+    if (!frameCount) return;
+
+    loadFrame(0).then(() => drawFrame(0));
+    loadFrame(frameCount - 1);
+
+    const queue = [];
+    for (let index = frameStep; index < frameCount - 1; index += frameStep) {
+      queue.push(index);
+    }
+
+    let cursor = 0;
+    const batchSize = isMobileLike ? 3 : 8;
+
+    const loadBatch = () => {
+      const batch = queue.slice(cursor, cursor + batchSize);
+      cursor += batchSize;
+
+      batch.forEach((index) => {
+        loadFrame(index).then((image) => {
+          if (image && Math.abs(index - currentFrame) <= frameStep) {
+            drawFrame(currentFrame);
+          }
+        });
+      });
+
+      if (cursor < queue.length) scheduleIdle(loadBatch);
+    };
+
+    scheduleIdle(loadBatch);
+  }
+
+  function initHeroCanvas() {
+    heroCanvas = query(SELECTOR.heroCanvas);
+    if (!heroCanvas) return;
+
+    heroCanvasContext = heroCanvas.getContext("2d", { alpha: false });
+    if (!heroCanvasContext) return;
+
+    resizeHeroCanvas();
+
+    if ("ResizeObserver" in win) {
+      resizeObserver = new ResizeObserver(resizeHeroCanvas);
+      resizeObserver.observe(heroCanvas);
+      cleanups.push(() => resizeObserver.disconnect());
+    } else {
+      listen(win, "resize", resizeHeroCanvas, { passive: true });
+    }
+
+    preloadFrames();
+  }
+
+  function buildHeroTitleTimeline() {
+    const eyebrow = query(SELECTOR.heroEyebrow);
+    const lines = queryAll(SELECTOR.heroLine);
+    const titleLines = lines.filter((line) => !line.classList.contains("is-presents"));
+    const presents = lines.filter((line) => line.classList.contains("is-presents"));
+    const cta = query(SELECTOR.heroCta);
+    const targets = [eyebrow, ...titleLines, ...presents, cta].filter(Boolean);
+
+    if (!targets.length) return null;
+
+    gsap.set(targets, { autoAlpha: 0, y: "2rem", filter: "blur(0.75rem)", force3D: true });
+    gsap.set(titleLines, { y: "2.75rem" });
+
+    return gsap.timeline({
+      paused: true,
+      defaults: { ease: "power3.out" },
+    })
+      .to(eyebrow, { autoAlpha: 1, y: 0, filter: "blur(0rem)", duration: 0.24 }, 0)
+      .to(titleLines, { autoAlpha: 1, y: 0, filter: "blur(0rem)", duration: 0.5, stagger: 0.06 }, 0.08)
+      .to(presents, { autoAlpha: 1, y: 0, filter: "blur(0rem)", duration: 0.28 }, 0.5)
+      .to(cta, { autoAlpha: 1, y: 0, filter: "blur(0rem)", duration: 0.34 }, 0.62);
+  }
+
+  function showReducedHero() {
+    loadFrame(0).then(() => drawFrame(0));
+
+    const reveal = query(SELECTOR.heroReveal);
+    const cta = query(SELECTOR.heroCta);
+    const curtainStage = query(SELECTOR.curtainStage);
+    const titleTargets = [
+      query(SELECTOR.heroEyebrow),
+      ...queryAll(SELECTOR.heroLine),
+      cta,
+    ].filter(Boolean);
+
+    gsap.set(titleTargets, { autoAlpha: 1, y: 0, clearProps: "transform,filter" });
+
+    if (reveal) reveal.style.pointerEvents = "auto";
+    if (cta) cta.style.pointerEvents = "auto";
+    if (curtainStage) curtainStage.style.display = "none";
+  }
+
+  function initHeroScrub() {
+    const heroPin = query(SELECTOR.heroPin);
+    if (!heroPin) return;
+
+    const reveal = query(SELECTOR.heroReveal);
+    const cta = query(SELECTOR.heroCta);
+    const titleTimeline = buildHeroTitleTimeline();
+
+    ScrollTrigger.create({
+      trigger: heroPin,
+      start: "top top",
+      end: "bottom bottom",
+      scrub: true,
+      invalidateOnRefresh: true,
+      onUpdate(self) {
+        drawFrame(self.progress * (frameCount - 1));
+
+        if (!titleTimeline) return;
+
+        const titleProgress = clamp(
+          0,
+          1,
+          (self.progress - titleRevealStart) / (titleRevealEnd - titleRevealStart)
+        );
+
+        titleTimeline.progress(titleProgress);
+
+        const active = titleProgress >= 0.98;
+        if (reveal) reveal.style.pointerEvents = active ? "auto" : "none";
+        if (cta) cta.style.pointerEvents = active ? "auto" : "none";
+      },
     });
   }
+
+  function initCurtain() {
+    const heroPin = query(SELECTOR.heroPin);
+    const stage = query(SELECTOR.curtainStage);
+    const left = query(SELECTOR.curtainLeft);
+    const right = query(SELECTOR.curtainRight);
+    const prompt = query(SELECTOR.curtainPrompt);
+
+    if (!heroPin || !stage || !left || !right) return;
+
+    const foldPositions = ["8%", "19%", "31%", "44%", "57%", "69%", "82%", "92%"];
+    const foldAnimations = ["curtain-fold-a", "curtain-fold-b", "curtain-fold-c", "curtain-fold-d"];
+
+    [left, right].forEach((panel, sideIndex) => {
+      if (panel.dataset.foldsReady === "true") return;
+
+      const anchor = query(SELECTOR.curtainPanelTop, panel);
+
+      foldPositions.forEach((position, index) => {
+        const fold = doc.createElement("div");
+        const depth = index % 2 === 0 ? "deep" : "shallow";
+        const animation = foldAnimations[(index + sideIndex) % foldAnimations.length];
+
+        fold.className = `clt-home-curtain is-fold is-${depth}`;
+        fold.style.left = position;
+        fold.style.animation = `${animation} ${6 + index * 0.18}s ${index * 0.16}s ease-in-out infinite alternate`;
+
+        panel.insertBefore(fold, anchor || null);
+      });
+
+      panel.dataset.foldsReady = "true";
+    });
+
+    ScrollTrigger.create({
+      trigger: heroPin,
+      start: "top top",
+      end: "bottom bottom",
+      scrub: true,
+      invalidateOnRefresh: true,
+      onUpdate(self) {
+        const openProgress = clamp(0, 1, self.progress / 0.14);
+        const eased = 1 - Math.pow(1 - openProgress, 3);
+        const travel = eased * 112;
+        const gather = 1 - eased * 0.24;
+        const sway = Math.sin(openProgress * Math.PI) * 3;
+
+        gsap.set(left, {
+          xPercent: -travel,
+          scaleX: gather,
+          skewY: sway,
+          transformOrigin: "100% 50%",
+          force3D: true,
+        });
+
+        gsap.set(right, {
+          xPercent: travel,
+          scaleX: gather,
+          skewY: -sway,
+          transformOrigin: "0% 50%",
+          force3D: true,
+        });
+
+        if (prompt) {
+          gsap.set(prompt, { autoAlpha: clamp(0, 1, 1 - openProgress * 4.5) });
+        }
+
+        stage.style.visibility = openProgress >= 1 ? "hidden" : "visible";
+      },
+    });
+  }
+
+  function initHeroMagnet() {
+    const cta = query(SELECTOR.heroCta);
+    if (!cta || reducedMotion || isTouch) return;
+
+    const moveX = gsap.quickTo(cta, "x", { duration: 0.28, ease: "power3.out" });
+    const moveY = gsap.quickTo(cta, "y", { duration: 0.28, ease: "power3.out" });
+    const rotate = gsap.quickTo(cta, "rotation", { duration: 0.35, ease: "power3.out" });
+
+    listen(cta, "pointermove", (event) => {
+      const bounds = cta.getBoundingClientRect();
+      const x = event.clientX - bounds.left - bounds.width / 2;
+      const y = event.clientY - bounds.top - bounds.height / 2;
+
+      moveX(clamp(-10, 10, x * 0.16));
+      moveY(clamp(-8, 8, y * 0.14));
+      rotate(clamp(-3, 3, x * 0.035));
+    }, { passive: true });
+
+    listen(cta, "pointerleave", () => {
+      moveX(0);
+      moveY(0);
+      rotate(0);
+    });
+  }
+
 
   function getScrollY() {
     if (lenis && typeof lenis.scroll === "number") return lenis.scroll;
     return win.scrollY || doc.documentElement.scrollTop || 0;
   }
 
-  function requestRefresh(delay = 80, force = false) {
-    win.clearTimeout(refreshTimer);
-
-    refreshTimer = win.setTimeout(() => {
-      const isMoving = Math.abs(lastKnownVelocity) > 0.02;
-      const shouldDefer = !force && didUserScroll && isMoving;
-
-      if (shouldDefer) {
-        requestRefresh(180, force);
-        return;
-      }
-
-      ScrollTrigger.refresh();
-    }, delay);
-  }
-
-  function refreshWhenLayoutSettles() {
-    requestRefresh(160, true);
-
-    addEvent(win, "load", () => requestRefresh(120, true), { once: true });
-
-    if (doc.fonts && doc.fonts.ready) {
-      doc.fonts.ready.then(() => requestRefresh(120, true)).catch(() => {});
-    }
-
-    // Webflow lazy-loaded images can fire load events as the user reaches lower sections.
-    // Refreshing during that moment can make scrubbed triggers and entrance timelines jump,
-    // so runtime image loads are intentionally not tied to ScrollTrigger.refresh().
-    win.setTimeout(() => { refreshGateUnlocked = true; }, 1800);
-  }
-
-  /* ── Lenis smooth scroll ─────────────────────────────────── */
-
   function initLenis() {
-    const removeNativeScrollFlag = addEvent(win, "scroll", () => {
-      if (refreshGateUnlocked && getScrollY() > 8) didUserScroll = true;
-    }, { passive: true });
-
-    mainCtx.add(() => () => removeNativeScrollFlag());
-
     if (reducedMotion || isMobileLike || !Lenis) return;
 
     lenis = new Lenis({
@@ -426,355 +664,51 @@
       infinite: false,
     });
 
-    const tick = (time) => lenis.raf(time * 1000);
-    gsap.ticker.add(tick);
+    const updateLenis = (time) => {
+      lenis.raf(time * 1000);
+    };
+
+    gsap.ticker.add(updateLenis);
     gsap.ticker.lagSmoothing(0);
 
     lenis.on("scroll", (event) => {
-      lastKnownScroll = typeof event.scroll === "number" ? event.scroll : getScrollY();
       lastKnownVelocity = typeof event.velocity === "number" ? event.velocity : 0;
-      if (refreshGateUnlocked && Math.abs(lastKnownVelocity) > 0.02) didUserScroll = true;
       ScrollTrigger.update();
     });
 
-    mainCtx.add(() => () => {
-      gsap.ticker.remove(tick);
+    cleanups.push(() => {
+      gsap.ticker.remove(updateLenis);
       if (lenis && typeof lenis.destroy === "function") lenis.destroy();
       lenis = null;
+      lastKnownVelocity = 0;
     });
   }
-
-  /* ── Canvas frame player ─────────────────────────────────── */
-
-  function frameSrc(index) {
-    return FRAME_URLS[index] || FRAME_URLS[0];
-  }
-
-  function loadFrame(index) {
-    index = normalizeFrameIndex(index);
-
-    if (index < 0 || index >= FRAME_COUNT) return Promise.resolve(null);
-    if (frames[index]) return Promise.resolve(frames[index]);
-    if (framePromises[index]) return framePromises[index];
-
-    framePromises[index] = new Promise((resolve) => {
-      const image = new Image();
-      image.decoding = "async";
-      image.onload = () => {
-        frames[index] = image;
-        resolve(image);
-      };
-      image.onerror = () => resolve(null);
-      image.src = frameSrc(index);
-    });
-
-    return framePromises[index];
-  }
-
-  function warmFrameCache() {
-    if (!FRAME_COUNT) return;
-
-    loadFrame(0).then(() => drawFrame(0));
-
-    const order = [];
-    for (let i = FRAME_STEP; i < FRAME_COUNT; i += FRAME_STEP) order.push(i);
-
-    let pointer = 0;
-    const batchSize = isMobileLike ? 3 : 8;
-
-    function loadBatch() {
-      const batch = order.slice(pointer, pointer + batchSize);
-      pointer += batchSize;
-
-      batch.forEach((index) => {
-        loadFrame(index).then((image) => {
-          if (image && Math.abs(index - currentFrameIndex) <= 1) drawFrame(currentFrameIndex);
-        });
-      });
-
-      if (pointer < order.length) {
-        win.setTimeout(loadBatch, 90);
-      }
-    }
-
-    loadBatch();
-  }
-
-  function nearestLoadedFrame(index) {
-    if (frames[index]) return index;
-
-    for (let offset = 1; offset < FRAME_COUNT; offset += 1) {
-      const before = index - offset;
-      const after = index + offset;
-      if (before >= 0 && frames[before]) return before;
-      if (after < FRAME_COUNT && frames[after]) return after;
-    }
-
-    return -1;
-  }
-
-  function drawFrame(index) {
-    if (!canvas || !canvasContext) return;
-
-    const requestedIndex = normalizeFrameIndex(index);
-    currentFrameIndex = requestedIndex;
-
-    if (!frames[requestedIndex]) {
-      loadFrame(requestedIndex).then(() => drawFrame(currentFrameIndex));
-    }
-
-    const drawableIndex = nearestLoadedFrame(requestedIndex);
-    if (drawableIndex < 0) return;
-
-    const image = frames[drawableIndex];
-    if (!image || !image.naturalWidth || !image.naturalHeight) return;
-
-    const canvasWidth = canvas.width;
-    const canvasHeight = canvas.height;
-    const scale = Math.max(canvasWidth / image.naturalWidth, canvasHeight / image.naturalHeight);
-    const width = image.naturalWidth * scale;
-    const height = image.naturalHeight * scale;
-
-    canvasContext.clearRect(0, 0, canvasWidth, canvasHeight);
-    canvasContext.drawImage(image, (canvasWidth - width) / 2, (canvasHeight - height) / 2, width, height);
-  }
-
-  function resizeCanvas() {
-    if (!canvas || !canvasContext) return;
-
-    const dpr = Math.min(win.devicePixelRatio || 1, isMobileLike ? 1.25 : 2);
-    const rect = canvas.getBoundingClientRect();
-    const width = Math.max(1, Math.round(rect.width * dpr));
-    const height = Math.max(1, Math.round(rect.height * dpr));
-
-    if (canvas.width !== width || canvas.height !== height) {
-      canvas.width = width;
-      canvas.height = height;
-    }
-
-    drawFrame(currentFrameIndex);
-  }
-
-  function initHeroCanvas() {
-    canvas = $("#hero-canvas");
-    if (!canvas) return;
-
-    canvasContext = canvas.getContext("2d", { alpha: false });
-    if (!canvasContext) return;
-
-    resizeCanvas();
-
-    if ("ResizeObserver" in win) {
-      resizeObserver = new ResizeObserver(() => resizeCanvas());
-      resizeObserver.observe(canvas);
-      mainCtx.add(() => () => resizeObserver.disconnect());
-    } else {
-      const removeResize = addEvent(win, "resize", resizeCanvas, { passive: true });
-      mainCtx.add(() => removeResize);
-    }
-
-    warmFrameCache();
-  }
-
-  /* ── Scroll scrub — drives canvas frame index + title reveal ─ */
-
-  function initScrollScrub() {
-    const heroPin = $('[data-gsap="home-hero-pin"]');
-    if (!heroPin || !canvas) return;
-
-    mainCtx.add(() => {
-      const titleTimeline = buildTitleRevealTimeline();
-      const reveal = $('[data-gsap="home-hero-reveal"]');
-      const cta = $('[data-gsap="home-hero-cta"]');
-
-      ScrollTrigger.create({
-        trigger: heroPin,
-        start: "top top",
-        end: "bottom bottom",
-        scrub: true,
-        invalidateOnRefresh: true,
-        onUpdate(self) {
-          drawFrame(self.progress * (FRAME_COUNT - 1));
-
-          if (titleTimeline) {
-            const revealProgress = clamp(
-              0,
-              1,
-              (self.progress - TITLE_REVEAL_AT) / (TITLE_REVEAL_END - TITLE_REVEAL_AT)
-            );
-
-            titleTimeline.progress(revealProgress);
-
-            const isInteractive = revealProgress >= 0.98;
-            if (reveal) reveal.style.pointerEvents = isInteractive ? "auto" : "none";
-            if (cta) cta.style.pointerEvents = isInteractive ? "auto" : "none";
-          }
-        },
-      });
-    });
-  }
-
-  /* ── Title reveal — scrubbed so both title lines finish in view ─ */
-
-  function buildTitleRevealTimeline() {
-    const eyebrow = $('[data-gsap="home-hero-eyebrow"]');
-    const lines = $$('[data-gsap="home-hero-line"]');
-    const titleLines = lines.filter((element) => !element.classList.contains("is-presents"));
-    const presents = lines.filter((element) => element.classList.contains("is-presents"));
-    const cta = $('[data-gsap="home-hero-cta"]');
-    const targets = [eyebrow, ...titleLines, ...presents, cta].filter(Boolean);
-
-    if (!targets.length) return null;
-
-    gsap.set(targets, { opacity: 0, y: 28, force3D: true });
-    gsap.set(titleLines, { y: 40 });
-
-    return gsap.timeline({
-      paused: true,
-      defaults: { ease: "power2.out" },
-    })
-      .to(eyebrow, { opacity: 1, y: 0, duration: 0.22 }, 0)
-      .to(titleLines, { opacity: 1, y: 0, duration: 0.42, stagger: 0.055 }, 0.08)
-      .to(presents, { opacity: 1, y: 0, duration: 0.26 }, 0.48)
-      .to(cta, { opacity: 1, y: 0, duration: 0.28 }, 0.62);
-  }
-
-  function showReducedHero() {
-    loadFrame(0).then(() => drawFrame(0));
-
-    $$('[data-gsap="home-hero-line"], [data-gsap="home-hero-eyebrow"], [data-gsap="home-hero-cta"]').forEach((element) => {
-      gsap.set(element, { opacity: 1, y: 0, clearProps: "transform" });
-    });
-
-    const reveal = $('[data-gsap="home-hero-reveal"]');
-    const cta = $('[data-gsap="home-hero-cta"]');
-    const stage = $('[data-gsap="home-curtain-stage"]');
-
-    if (reveal) reveal.style.pointerEvents = "auto";
-    if (cta) cta.style.pointerEvents = "auto";
-    if (stage) stage.style.display = "none";
-  }
-
-  /* ── Curtain — fold injection + scroll open ──────────────── */
-
-  function initCurtain() {
-    const left = $("#clt-home-curtain-left");
-    const right = $("#clt-home-curtain-right");
-    const stage = $('[data-gsap="home-curtain-stage"]');
-    if (!left || !right || !stage) return;
-
-    const foldConfig = [
-      { el: left, folds: [
-        { cls: "deep", left: "6%", anim: "curtain-fold-a", dur: "6.8s", delay: "0.0s" },
-        { cls: "shallow", left: "14%", anim: "curtain-fold-b", dur: "7.5s", delay: "0.8s" },
-        { cls: "deep", left: "23%", anim: "curtain-fold-c", dur: "6.2s", delay: "1.6s" },
-        { cls: "shallow", left: "32%", anim: "curtain-fold-d", dur: "7.0s", delay: "0.4s" },
-        { cls: "deep", left: "43%", anim: "curtain-fold-e", dur: "6.5s", delay: "1.2s" },
-        { cls: "shallow", left: "53%", anim: "curtain-fold-b", dur: "7.2s", delay: "0.6s" },
-        { cls: "deep", left: "63%", anim: "curtain-fold-a", dur: "6.4s", delay: "1.8s" },
-        { cls: "shallow", left: "72%", anim: "curtain-fold-d", dur: "7.4s", delay: "1.0s" },
-        { cls: "deep", left: "82%", anim: "curtain-fold-c", dur: "6.6s", delay: "0.2s" },
-        { cls: "shallow", left: "91%", anim: "curtain-fold-e", dur: "7.1s", delay: "1.4s" },
-      ] },
-      { el: right, folds: [
-        { cls: "shallow", left: "5%", anim: "curtain-fold-c", dur: "7.0s", delay: "0.5s" },
-        { cls: "deep", left: "14%", anim: "curtain-fold-e", dur: "6.3s", delay: "1.3s" },
-        { cls: "shallow", left: "22%", anim: "curtain-fold-a", dur: "7.6s", delay: "0.9s" },
-        { cls: "deep", left: "32%", anim: "curtain-fold-d", dur: "6.1s", delay: "0.1s" },
-        { cls: "shallow", left: "42%", anim: "curtain-fold-b", dur: "7.3s", delay: "1.7s" },
-        { cls: "deep", left: "52%", anim: "curtain-fold-c", dur: "6.7s", delay: "0.7s" },
-        { cls: "shallow", left: "62%", anim: "curtain-fold-e", dur: "7.5s", delay: "1.5s" },
-        { cls: "deep", left: "73%", anim: "curtain-fold-a", dur: "6.0s", delay: "0.3s" },
-        { cls: "shallow", left: "83%", anim: "curtain-fold-d", dur: "7.2s", delay: "1.1s" },
-        { cls: "deep", left: "92%", anim: "curtain-fold-b", dur: "6.9s", delay: "0.6s" },
-      ] },
-    ];
-
-    foldConfig.forEach((group) => {
-      if (group.el.querySelector('[data-generated="home-curtain-fold"]')) return;
-
-      group.folds.forEach((fold) => {
-        const element = doc.createElement("div");
-        element.className = `clt-home-curtain is-fold is-${fold.cls}`;
-        element.dataset.generated = "home-curtain-fold";
-        element.style.left = fold.left;
-        element.style.animation = `${fold.anim} ${fold.dur} ${fold.delay} ease-in-out infinite alternate`;
-
-        const panelTop = group.el.querySelector('[data-gsap="home-curtain-panel-top"]');
-        group.el.insertBefore(element, panelTop || null);
-      });
-    });
-
-    const prompt = $('[data-gsap="home-curtain-prompt"]');
-    const heroPin = $('[data-gsap="home-hero-pin"]');
-
-    mainCtx.add(() => {
-      ScrollTrigger.create({
-        trigger: heroPin,
-        start: "top top",
-        end: "bottom bottom",
-        scrub: true,
-        invalidateOnRefresh: true,
-        onUpdate(self) {
-          const openEnd = 0.12;
-          const rawProgress = Math.min(self.progress / openEnd, 1);
-          const eased = 1 - Math.pow(1 - rawProgress, 2.8);
-          const travel = eased * 110;
-          const gather = 1 - eased * 0.28;
-          const sway = Math.sin(rawProgress * Math.PI) * 3.5;
-
-          gsap.set(left, {
-            xPercent: -travel,
-            scaleX: gather,
-            skewY: sway,
-            transformOrigin: "100% 50%",
-            force3D: true,
-          });
-
-          gsap.set(right, {
-            xPercent: travel,
-            scaleX: gather,
-            skewY: -sway,
-            transformOrigin: "0% 50%",
-            force3D: true,
-          });
-
-          if (prompt && self.progress > 0.003) {
-            gsap.set(prompt, { opacity: Math.max(0, 1 - rawProgress * 5) });
-          }
-
-          stage.style.visibility = rawProgress >= 1 ? "hidden" : "visible";
-        },
-      });
-    });
-  }
-
-  /* ── Ambient dust particles ──────────────────────────────── */
 
   function initDust() {
-    const far = $("#dust-far");
-    const mid = $("#dust-mid");
-    const near = $("#dust-near");
-    const root = $("#star-container");
-    if (!far && !mid && !near) return;
-
+    const far = query(SELECTOR.dustFar);
+    const mid = query(SELECTOR.dustMid);
+    const near = query(SELECTOR.dustNear);
+    const root = query(SELECTOR.dustRoot);
     const containers = [far, mid, near].filter(Boolean);
+
+    if (!containers.length) return;
+
     containers.forEach((container) => {
-      $$(".clt-home-dust.is-particle", container).forEach((particle) => particle.remove());
+      queryAll(SELECTOR.dustParticle, container).forEach((particle) => particle.remove());
     });
 
-    const density = reducedMotion ? 0.35 : (isMobileLike ? 0.7 : DUST_DENSITY);
+    const density = reducedMotion ? 0.35 : (isMobileLike ? 0.7 : dustDensity);
     const tones = ["warm", "warm", "warm", "brass", "brass", "cool"];
     const stars = [];
     const wrapPercent = gsap.utils.wrap(0, 100);
 
-    function spawn(container, count, minSize, maxSize, depth) {
+    const spawn = (container, count, minSize, maxSize, depth) => {
       if (!container) return;
 
       const fragment = doc.createDocumentFragment();
       const total = Math.round(count * density);
 
-      for (let i = 0; i < total; i += 1) {
+      for (let index = 0; index < total; index += 1) {
         const element = doc.createElement("div");
         const tone = tones[Math.floor(Math.random() * tones.length)];
         const size = random(minSize, maxSize);
@@ -802,12 +736,9 @@
           floatY: 0,
           inertiaX: 0,
           inertiaY: 0,
-          pointerX: 0,
           pointerY: 0,
-          setCss: null,
+          setCss: gsap.quickSetter(element, "css"),
         };
-
-        star.setCss = gsap.quickSetter(element, "css");
 
         gsap.to(star, {
           floatX: random(-18, 18) * depth,
@@ -822,11 +753,15 @@
       }
 
       container.appendChild(fragment);
-    }
+    };
 
     spawn(far, 46, 1.0, 2.0, 0.45);
     spawn(mid, 31, 1.3, 2.8, 0.78);
     spawn(near, 18, 1.8, 3.6, 1.15);
+
+    cleanups.push(() => {
+      stars.forEach((star) => star.element.remove());
+    });
 
     if (reducedMotion || !stars.length) return;
 
@@ -838,7 +773,7 @@
     let lastPointerY = 0;
     let hasPointer = false;
 
-    const removePointerMove = isTouch ? () => {} : addEvent(win, "pointermove", (event) => {
+    const removePointerMove = isTouch ? () => undefined : listen(win, "pointermove", (event) => {
       if (!hasPointer) {
         lastPointerX = event.clientX;
         lastPointerY = event.clientY;
@@ -855,9 +790,9 @@
     const ticker = () => {
       const scroll = getScrollY();
       const scrollDelta = scroll - lastScroll;
-      lastScroll = scroll;
-
       const velocity = lenis ? lastKnownVelocity * 1000 : scrollDelta * 60;
+
+      lastScroll = scroll;
       scrollImpulse += clamp(-90, 90, scrollDelta);
 
       stars.forEach((star) => {
@@ -890,510 +825,433 @@
 
     gsap.ticker.add(ticker);
 
-    mainCtx.add(() => {
-      if (root && far) {
-        gsap.to(far, {
-          y: 70,
-          ease: "none",
-          scrollTrigger: {
-            trigger: ".clt-page",
-            start: "top top",
-            end: "bottom bottom",
-            scrub: 1.3,
-            invalidateOnRefresh: true,
-          },
-        });
-      }
+    const page = query(SELECTOR.page);
 
-      if (root && mid) {
-        gsap.to(mid, {
-          y: -130,
-          ease: "none",
-          scrollTrigger: {
-            trigger: ".clt-page",
-            start: "top top",
-            end: "bottom bottom",
-            scrub: 1.5,
-            invalidateOnRefresh: true,
-          },
-        });
-      }
+    if (page && root && far) {
+      gsap.to(far, {
+        y: 70,
+        ease: "none",
+        scrollTrigger: {
+          trigger: page,
+          start: "top top",
+          end: "bottom bottom",
+          scrub: 1.3,
+          invalidateOnRefresh: true,
+        },
+      });
+    }
 
-      if (root && near) {
-        gsap.to(near, {
-          y: -260,
-          ease: "none",
-          scrollTrigger: {
-            trigger: ".clt-page",
-            start: "top top",
-            end: "bottom bottom",
-            scrub: 1.8,
-            invalidateOnRefresh: true,
-          },
-        });
-      }
+    if (page && root && mid) {
+      gsap.to(mid, {
+        y: -130,
+        ease: "none",
+        scrollTrigger: {
+          trigger: page,
+          start: "top top",
+          end: "bottom bottom",
+          scrub: 1.5,
+          invalidateOnRefresh: true,
+        },
+      });
+    }
 
-      return () => {
-        gsap.ticker.remove(ticker);
-        removePointerMove();
-      };
+    if (page && root && near) {
+      gsap.to(near, {
+        y: -260,
+        ease: "none",
+        scrollTrigger: {
+          trigger: page,
+          start: "top top",
+          end: "bottom bottom",
+          scrub: 1.8,
+          invalidateOnRefresh: true,
+        },
+      });
+    }
+
+    cleanups.push(() => {
+      gsap.ticker.remove(ticker);
+      removePointerMove();
     });
   }
 
-  /* ── Marquee — scroll-direction aware ────────────────────── */
+  function initMobileViewportLock() {
+    if (!isMobileLike) return;
+
+    const sync = () => {
+      const height = Math.round((win.visualViewport && win.visualViewport.height) || win.innerHeight || 1);
+      const hero = query(SELECTOR.heroSection);
+      const heroPin = query(SELECTOR.heroPin);
+      const pinMultiplier = parseFloat(win.getComputedStyle(hero || doc.documentElement).getPropertyValue("--pin-multiplier")) || 3;
+
+      doc.documentElement.style.setProperty("--clt-js-vh", `${height * 0.01}px`);
+
+      if (hero) hero.style.minHeight = `${height}px`;
+      if (heroPin) heroPin.style.minHeight = `${Math.round(height * pinMultiplier)}px`;
+
+      resizeHeroCanvas();
+      ScrollTrigger.refresh();
+    };
+
+    sync();
+    listen(win, "orientationchange", () => win.setTimeout(sync, 160), { passive: true });
+
+    if (win.visualViewport) {
+      listen(win.visualViewport, "resize", () => win.setTimeout(sync, 120), { passive: true });
+    }
+  }
 
   function initMarquee() {
-    const track = $(".clt-home-marquee.is-track");
-    const section = $('[data-webflow-section="acclaim-marquee"]');
-    const firstSet = $(".clt-home-marquee.is-set", track || doc);
-    if (!track || !section || !firstSet) return;
+    const track = query(SELECTOR.marqueeTrack);
+    const section = query(SELECTOR.marqueeSection) || (track && track.closest(SELECTOR.marqueeSection));
+    if (!track || !section) return;
+
+    if (track.dataset.marqueeReady !== "true") {
+      const sets = queryAll(SELECTOR.marqueeSet, track);
+
+      if (sets.length === 1) {
+        const clone = sets[0].cloneNode(true);
+        clone.setAttribute("aria-hidden", "true");
+        track.appendChild(clone);
+      }
+
+      track.dataset.marqueeReady = "true";
+    }
+
+    const firstSet = query(SELECTOR.marqueeSet, track);
+    if (!firstSet) return;
 
     track.style.animation = "none";
 
-    mainCtx.add(() => {
-      const getSetWidth = () => Math.max(1, firstSet.getBoundingClientRect().width);
-      let setWidth = getSetWidth();
+    let setWidth = 1;
+    let direction = 1;
+    let isHovering = false;
 
-      const marqueeTween = gsap.to(track, {
-        x: () => -setWidth,
-        duration: 40,
-        ease: "none",
-        repeat: -1,
-        modifiers: {
-          x: (value) => `${parseFloat(value) % -setWidth}px`,
-        },
+    const updateWidth = () => {
+      setWidth = Math.max(1, firstSet.getBoundingClientRect().width);
+    };
+
+    updateWidth();
+
+    const marqueeTween = gsap.to(track, {
+      x: () => -setWidth,
+      duration: () => setWidth / (isMobileLike ? 45 : 70),
+      ease: "none",
+      repeat: -1,
+      modifiers: {
+        x: (value) => `${parseFloat(value) % -setWidth}px`,
+      },
+    });
+
+    const updateSpeed = (speed = 1) => {
+      gsap.to(marqueeTween, {
+        timeScale: direction * (isHovering ? 0.28 : speed),
+        duration: 0.45,
+        overwrite: true,
       });
+    };
 
-      const refreshWidth = () => {
-        setWidth = getSetWidth();
-        marqueeTween.invalidate();
-      };
+    listen(section, "mouseenter", () => {
+      isHovering = true;
+      updateSpeed(1);
+    });
 
-      const removeEnter = addEvent(section, "mouseenter", () => {
-        gsap.to(marqueeTween, { timeScale: 0.3, duration: 0.45, overwrite: true });
-      });
+    listen(section, "mouseleave", () => {
+      isHovering = false;
+      updateSpeed(1);
+    });
 
-      const removeLeave = addEvent(section, "mouseleave", () => {
-        gsap.to(marqueeTween, { timeScale: 1, duration: 0.45, overwrite: true });
-      });
+    listen(win, "resize", () => {
+      updateWidth();
+      marqueeTween.invalidate();
+    }, { passive: true });
 
-      const removeResize = addEvent(win, "resize", refreshWidth, { passive: true });
-
-      ScrollTrigger.create({
-        trigger: section,
-        start: "top bottom",
-        end: "bottom top",
-        onUpdate(self) {
-          const velocity = Math.min(Math.abs(self.getVelocity()) / 2500, 4);
-          gsap.to(marqueeTween, {
-            timeScale: self.direction * Math.max(1, velocity),
-            duration: 0.45,
-            overwrite: true,
-          });
-        },
-      });
-
-      return () => {
-        removeEnter();
-        removeLeave();
-        removeResize();
-        marqueeTween.kill();
-      };
+    ScrollTrigger.create({
+      trigger: section,
+      start: "top bottom",
+      end: "bottom top",
+      onUpdate(self) {
+        direction = self.direction || 1;
+        const velocityBoost = clamp(1, 4, Math.abs(self.getVelocity()) / 2200);
+        updateSpeed(velocityBoost);
+      },
     });
   }
 
-  /* ── Explore — infinite draggable carousel ───────────────── */
+  function wrapNegativeX(x, width) {
+    if (!width) return 0;
+    return ((x % -width) + -width) % -width;
+  }
 
   function initExploreCarousel() {
-    const section = $("#explore") || $("#education");
-    if (section && section.id === "education") {
-      section.id = "explore";
-      $$("[href='#education']").forEach((link) => link.setAttribute("href", "#explore"));
-    }
+    const section = query(SELECTOR.exploreSection);
+    const mask = query(SELECTOR.exploreMask);
+    const track = query(SELECTOR.exploreTrack);
+    if (!section || !mask || !track) return;
 
-    const track = $("#explore-track");
-    const trackMask = $("#explore-mask");
-    if (!section || !track || !trackMask) return;
-
-    const originalCards = $$(".clt-home-explore.is-card", track).filter((card) => card.dataset.clone !== "true");
+    const originalCards = queryAll(SELECTOR.exploreCard, track).filter((card) => card.dataset.clone !== "true");
     if (!originalCards.length) return;
 
-    if (!track.dataset.clonesReady) {
+    if (track.dataset.clonesReady !== "true") {
       originalCards.forEach((card) => {
         const clone = card.cloneNode(true);
         clone.dataset.clone = "true";
         clone.setAttribute("aria-hidden", "true");
         track.appendChild(clone);
       });
+
       track.dataset.clonesReady = "true";
     }
 
-    mainCtx.add(() => {
-      ScrollTrigger.create({
-        trigger: section,
-        start: "top 95%",
-        end: "top 20%",
-        toggleActions: "play none none reverse",
-        onEnter: () => gsap.to(section, { opacity: 1, y: 0, duration: 0.8, ease: "power2.out" }),
-        onLeaveBack: () => gsap.to(section, { opacity: 0, y: 50, duration: 0.5, ease: "power2.in" }),
-      });
-    });
-
     let setWidth = 1;
 
-    function calcSetWidth() {
-      const gap = parseFloat(win.getComputedStyle(track).columnGap || win.getComputedStyle(track).gap) || 24;
-      const cardsWidth = originalCards.reduce((total, card) => total + card.getBoundingClientRect().width, 0);
-      return Math.max(1, cardsWidth + gap * originalCards.length);
-    }
+    const updateSetWidth = () => {
+      const styles = win.getComputedStyle(track);
+      const gap = parseFloat(styles.columnGap || styles.gap) || 24;
+      const cardsWidth = originalCards.reduce((total, card) => {
+        return total + card.getBoundingClientRect().width;
+      }, 0);
 
-    function updateWidth() {
-      setWidth = calcSetWidth();
-    }
+      setWidth = Math.max(1, cardsWidth + gap * originalCards.length);
 
-    function wrapX(x) {
-      if (!setWidth) return 0;
-      return ((x % -setWidth) + -setWidth) % -setWidth;
-    }
+      const currentX = Number(gsap.getProperty(track, "x")) || 0;
+      gsap.set(track, { x: wrapNegativeX(currentX, setWidth) });
+    };
 
-    updateWidth();
+    updateSetWidth();
+    listen(win, "resize", updateSetWidth, { passive: true });
 
-    mainCtx.add(() => {
-      const removeResize = addEvent(win, "resize", () => {
-        updateWidth();
-        const currentX = Number(gsap.getProperty(track, "x")) || 0;
-        gsap.set(track, { x: wrapX(currentX) });
-      }, { passive: true });
-
-      return () => removeResize();
+    gsap.fromTo(section, {
+      autoAlpha: 0,
+      y: "3rem",
+    }, {
+      autoAlpha: 1,
+      y: 0,
+      duration: 0.8,
+      ease: "power3.out",
+      scrollTrigger: {
+        trigger: section,
+        start: "top 90%",
+        toggleActions: "play none none reverse",
+      },
     });
 
-    if (!Draggable) {
-      initCarouselLens(trackMask, track);
-      return;
-    }
-
+    let draggable = null;
+    let momentumTween = null;
     let lastDragX = 0;
     let lastDragTime = 0;
     let dragVelocity = 0;
-    let momentumTween = null;
+    let previousScroll = getScrollY();
 
-    const draggable = Draggable.create(track, {
-      type: "x",
-      cursor: "none",
-      edgeResistance: 0,
-      dragClickables: true,
-      inertia: false,
-      onPress() {
-        if (momentumTween) momentumTween.kill();
-        updateWidth();
-        lastDragX = this.x;
-        lastDragTime = Date.now();
-        gsap.to(trackMask, { rotation: -2.6, duration: 0.25, ease: "power2.out" });
-      },
-      onDrag() {
-        const now = Date.now();
-        const deltaTime = Math.max((now - lastDragTime) / 1000, 0.001);
-        dragVelocity = (this.x - lastDragX) / deltaTime;
-        lastDragX = this.x;
-        lastDragTime = now;
+    const setTrackX = (x) => gsap.set(track, { x: wrapNegativeX(x, setWidth) });
 
-        const wrapped = wrapX(this.x);
-        if (Math.abs(wrapped - this.x) > 0.01) {
-          gsap.set(track, { x: wrapped });
-          this.update();
-        }
-      },
-      onRelease() {
-        gsap.to(trackMask, { rotation: -2, duration: 0.6, ease: "elastic.out(1, 0.5)" });
-      },
-      onDragEnd() {
-        const distance = dragVelocity * 0.42;
-        const startX = Number(gsap.getProperty(track, "x")) || 0;
-        const proxy = { progress: 0 };
-        const duration = clamp(0.35, 2.25, Math.abs(dragVelocity) / 640);
+    const releaseMomentum = () => {
+      const startX = Number(gsap.getProperty(track, "x")) || 0;
+      const distance = dragVelocity * 0.34;
+      const proxy = { progress: 0 };
+      const duration = clamp(0.35, 1.8, Math.abs(dragVelocity) / 760);
 
-        momentumTween = gsap.to(proxy, {
-          progress: 1,
-          duration,
-          ease: "power3.out",
-          onUpdate() {
-            gsap.set(track, { x: wrapX(startX + distance * proxy.progress) });
-          },
-          onComplete: () => draggable.update(),
-        });
-      },
-    })[0];
+      if (momentumTween) momentumTween.kill();
 
-    initCarouselLens(trackMask, track);
-
-    mainCtx.add(() => {
-      let previousScroll = getScrollY();
-
-      const ticker = () => {
-        const currentScroll = getScrollY();
-        const delta = currentScroll - previousScroll;
-        previousScroll = currentScroll;
-
-        if (draggable.isDragging) return;
-        if (momentumTween && momentumTween.isActive()) return;
-        if (Math.abs(delta) < 0.5) return;
-
-        const currentX = Number(gsap.getProperty(track, "x")) || 0;
-        gsap.set(track, { x: wrapX(currentX - delta * 1.25) });
-        draggable.update();
-      };
-
-      gsap.ticker.add(ticker);
-
-      return () => {
-        gsap.ticker.remove(ticker);
-        if (momentumTween) momentumTween.kill();
-        draggable.kill();
-        gsap.set(track, { clearProps: "transform" });
-      };
-    });
-  }
-
-  /* ── Carousel lens — custom cursor ───────────────────────── */
-
-  function initCarouselLens(trackMask, track) {
-    const lens = $("#clt-home-carousel-lens");
-    if (!lens || isTouch) return;
-
-    const moveX = gsap.quickTo(lens, "left", { duration: 0.12, ease: "power2.out" });
-    const moveY = gsap.quickTo(lens, "top", { duration: 0.12, ease: "power2.out" });
-
-    let isOverTrack = false;
-    let isDragging = false;
-
-    function update() {
-      lens.classList.remove("clt-state-visible", "clt-home-is-hidden", "clt-state-dragging");
-
-      if (!isOverTrack) return;
-
-      lens.classList.add("clt-state-visible");
-      if (isDragging) lens.classList.add("clt-state-dragging");
-    }
-
-    mainCtx.add(() => {
-      const cleanups = [
-        addEvent(trackMask, "mouseenter", () => { isOverTrack = true; update(); }),
-        addEvent(trackMask, "mouseleave", () => { isOverTrack = false; isDragging = false; update(); }),
-        addEvent(trackMask, "mousemove", (event) => { moveX(event.clientX); moveY(event.clientY); }, { passive: true }),
-        addEvent(trackMask, "mousedown", () => { isDragging = true; update(); }),
-        addEvent(win, "mouseup", () => { if (isDragging) { isDragging = false; update(); } }),
-      ];
-
-      $$(".clt-home-explore.is-card", track).forEach((card) => {
-        cleanups.push(addEvent(card, "mouseenter", update));
-        cleanups.push(addEvent(card, "mouseleave", update));
-      });
-
-      return () => cleanups.forEach((cleanup) => cleanup());
-    });
-  }
-  /* ── Past performances — horizontal scroll ───────────────── */
-
-  function initPastPerformances() {
-    const section = $("#archive");
-    const track = $("#past-track");
-    const scrollWrap = $("#past-scroll-wrap");
-    if (!section || !track || !scrollWrap) return;
-
-    const cards = $$(".clt-home-past.is-card", section);
-    const header = $(".clt-home-past.is-header", section);
-
-    mainCtx.add(() => {
-      ScrollTrigger.create({
-        trigger: section,
-        start: "top 85%",
-        invalidateOnRefresh: true,
-        onEnter() {
-          gsap.from(header, { opacity: 0, y: 30, duration: 0.6, ease: "power2.out", immediateRender: false });
-          gsap.from(cards, { opacity: 0, y: 30, scale: 0.95, duration: 0.6, stagger: 0.06, ease: "power2.out", delay: 0.2, immediateRender: false });
+      momentumTween = gsap.to(proxy, {
+        progress: 1,
+        duration,
+        ease: "power3.out",
+        onUpdate() {
+          setTrackX(startX + distance * proxy.progress);
         },
-        onLeaveBack() {
-          gsap.set([header, ...cards].filter(Boolean), { clearProps: "opacity,transform" });
-        },
-      });
-
-      const pastMedia = gsap.matchMedia();
-
-      pastMedia.add("(min-width: 761px)", () => {
-        const getScrollDistance = () => Math.max(track.scrollWidth - scrollWrap.clientWidth, 0);
-
-        const tween = gsap.to(track, {
-          x: () => -getScrollDistance(),
-          ease: "none",
-          scrollTrigger: {
-            trigger: scrollWrap,
-            start: "center center",
-            end: () => `+=${Math.max(getScrollDistance() * 1.08, win.innerHeight * 0.65)}`,
-            scrub: 0.85,
-            pin: scrollWrap,
-            anticipatePin: 1,
-            invalidateOnRefresh: true,
-            onRefreshInit: () => gsap.set(track, { x: 0 }),
-          },
-        });
-
-        return () => {
-          tween.kill();
-          gsap.set(track, { clearProps: "transform" });
-        };
-      });
-
-      pastMedia.add("(max-width: 760px)", () => {
-        gsap.set(track, { clearProps: "transform" });
-      });
-
-      return () => pastMedia.revert();
-    });
-  }
-
-  /* ── Footer — entrance + legal modals ────────────────────── */
-
-  function initFooter() {
-    const footer = $("#clt-home-footer");
-    if (!footer) return;
-
-    const brand = $(".clt-home-footer.is-brand", footer);
-    const footerNav = $(".clt-home-footer.is-nav", footer);
-    const social = $(".clt-home-footer.is-social", footer);
-    const legal = $(".clt-home-footer.is-legal", footer);
-    const socialLinks = $$(".clt-home-footer.is-social-link", footer);
-
-    mainCtx.add(() => {
-      ScrollTrigger.create({
-        trigger: footer,
-        start: "top 90%",
-        once: true,
-        onEnter() {
-          gsap.timeline()
-            .from(brand, { opacity: 0, y: 20, duration: 0.5, ease: "power2.out", immediateRender: false })
-            .from(footerNav, { opacity: 0, y: 20, duration: 0.4, ease: "power2.out", immediateRender: false }, "-=0.25")
-            .from(social, { opacity: 0, y: 20, duration: 0.4, ease: "power2.out", immediateRender: false }, "-=0.2")
-            .from(socialLinks, { opacity: 0, y: 10, duration: 0.3, stagger: 0.05, ease: "power2.out", immediateRender: false }, "-=0.16")
-            .from(legal, { opacity: 0, y: 20, duration: 0.35, ease: "power2.out", immediateRender: false }, "-=0.15");
-        },
-      });
-    });
-
-    initLegalModals();
-  }
-
-  function initLegalModals() {
-    const termsButton = $("#terms-btn");
-    const privacyButton = $("#privacy-btn");
-    const termsModal = $("#terms-modal");
-    const privacyModal = $("#privacy-modal");
-    let activeModal = null;
-
-    function openModal(modal) {
-      if (!modal) return;
-
-      activeModal = modal;
-      modal.classList.add("clt-state-open");
-      modal.setAttribute("aria-hidden", "false");
-
-      const panel = $(".clt-home-legal-modal.is-panel", modal);
-      const backdrop = $(".clt-home-legal-modal.is-backdrop", modal);
-
-      gsap.fromTo(backdrop, { opacity: 0 }, { opacity: 1, duration: 0.32, ease: "power2.out" });
-      gsap.fromTo(panel, {
-        scale: 0.96,
-        y: 18,
-        opacity: 0,
-      }, {
-        scale: 1,
-        y: 0,
-        opacity: 1,
-        duration: 0.4,
-        ease: "power2.out",
-        delay: 0.04,
-      });
-
-      if (lenis && typeof lenis.stop === "function") lenis.stop();
-      doc.body.style.overflow = "hidden";
-
-      if (panel) {
-        panel.setAttribute("tabindex", "-1");
-        panel.focus({ preventScroll: true });
-      }
-    }
-
-    function closeModal(modal) {
-      if (!modal) return;
-
-      const panel = $(".clt-home-legal-modal.is-panel", modal);
-      const backdrop = $(".clt-home-legal-modal.is-backdrop", modal);
-
-      gsap.to(panel, { scale: 0.97, y: 14, opacity: 0, duration: 0.26, ease: "power2.in" });
-      gsap.to(backdrop, {
-        opacity: 0,
-        duration: 0.28,
-        delay: 0.06,
         onComplete() {
-          modal.classList.remove("clt-state-open");
-          modal.setAttribute("aria-hidden", "true");
-          activeModal = null;
-
-          if (lenis && typeof lenis.start === "function") lenis.start();
-          doc.body.style.overflow = "";
+          if (draggable) draggable.update();
         },
       });
+    };
+
+    if (Draggable) {
+      draggable = Draggable.create(track, {
+        type: "x",
+        trigger: mask,
+        allowContextMenu: true,
+        dragClickables: true,
+        onPress() {
+          if (momentumTween) momentumTween.kill();
+
+          lastDragX = this.x;
+          lastDragTime = performance.now();
+          dragVelocity = 0;
+
+          gsap.to(mask, { rotation: -1.5, duration: 0.25, ease: "power2.out" });
+        },
+        onDrag() {
+          const now = performance.now();
+          const deltaX = this.x - lastDragX;
+          const deltaTime = Math.max(16, now - lastDragTime);
+
+          dragVelocity = (deltaX / deltaTime) * 1000;
+          lastDragX = this.x;
+          lastDragTime = now;
+
+          const wrapped = wrapNegativeX(this.x, setWidth);
+          if (Math.abs(wrapped - this.x) > 0.1) {
+            gsap.set(track, { x: wrapped });
+            this.update();
+            lastDragX = wrapped;
+          }
+        },
+        onRelease() {
+          gsap.to(mask, { rotation: 0, duration: 0.55, ease: "elastic.out(1, 0.55)" });
+        },
+        onDragEnd: releaseMomentum,
+      })[0];
     }
 
-    mainCtx.add(() => {
-      const cleanups = [];
+    const drift = () => {
+      const scroll = getScrollY();
+      const scrollDelta = scroll - previousScroll;
+      previousScroll = scroll;
 
-      if (termsButton && termsModal) cleanups.push(addEvent(termsButton, "click", () => openModal(termsModal)));
-      if (privacyButton && privacyModal) cleanups.push(addEvent(privacyButton, "click", () => openModal(privacyModal)));
+      const isDragging = draggable && draggable.isDragging;
+      const hasMomentum = momentumTween && momentumTween.isActive();
 
-      [termsModal, privacyModal].forEach((modal) => {
-        if (!modal) return;
+      if (isDragging || hasMomentum) return;
 
-        $$("[data-close]", modal).forEach((element) => {
-          cleanups.push(addEvent(element, "click", () => closeModal(modal)));
-        });
+      const currentX = Number(gsap.getProperty(track, "x")) || 0;
+      const autoDrift = reducedMotion ? 0 : (isMobileLike ? 0.22 : 0.36);
+      const scrollPush = clamp(-18, 18, scrollDelta * 0.55);
+
+      setTrackX(currentX - autoDrift - scrollPush);
+
+      if (draggable) draggable.update();
+    };
+
+    gsap.ticker.add(drift);
+    cleanups.push(() => {
+      gsap.ticker.remove(drift);
+      if (momentumTween) momentumTween.kill();
+      if (draggable) draggable.kill();
+      gsap.set(track, { clearProps: "transform" });
+    });
+
+    initExploreLens(mask, track);
+  }
+
+  function initExploreLens(mask, track) {
+    const lens = query(SELECTOR.exploreLens);
+    if (!lens || isTouch || reducedMotion) return;
+
+    gsap.set(lens, { xPercent: -50, yPercent: -50, scale: 0.9, autoAlpha: 0 });
+
+    const moveX = gsap.quickTo(lens, "left", { duration: 0.16, ease: "power3.out" });
+    const moveY = gsap.quickTo(lens, "top", { duration: 0.16, ease: "power3.out" });
+    const rotate = gsap.quickTo(lens, "rotation", { duration: 0.24, ease: "power3.out" });
+
+    let isOver = false;
+    let isDown = false;
+    let lastX = 0;
+
+    const render = () => {
+      lens.classList.toggle("clt-state-visible", isOver);
+      lens.classList.toggle("clt-state-dragging", isDown);
+
+      gsap.to(lens, {
+        autoAlpha: isOver ? 1 : 0,
+        scale: isDown ? 0.78 : 1,
+        duration: 0.22,
+        overwrite: true,
       });
+    };
 
-      cleanups.push(addEvent(win, "keydown", (event) => {
-        if (event.key === "Escape" && activeModal) closeModal(activeModal);
-      }));
+    listen(mask, "pointerenter", () => {
+      isOver = true;
+      render();
+    });
 
-      return () => cleanups.forEach((cleanup) => cleanup());
+    listen(mask, "pointerleave", () => {
+      isOver = false;
+      isDown = false;
+      rotate(0);
+      render();
+    });
+
+    listen(mask, "pointermove", (event) => {
+      const deltaX = event.clientX - lastX;
+      lastX = event.clientX;
+
+      moveX(event.clientX);
+      moveY(event.clientY);
+      rotate(clamp(-12, 12, deltaX * 0.4));
+    }, { passive: true });
+
+    listen(mask, "pointerdown", () => {
+      isDown = true;
+      render();
+    });
+
+    listen(win, "pointerup", () => {
+      if (!isDown) return;
+      isDown = false;
+      render();
+    });
+
+    queryAll(SELECTOR.exploreCard, track).forEach((card) => {
+      listen(card, "pointerenter", () => lens.classList.add("clt-home-is-hidden"));
+      listen(card, "pointerleave", () => lens.classList.remove("clt-home-is-hidden"));
     });
   }
 
-  /* ── Entry point ─────────────────────────────────────────── */
+  function refreshAfterLayoutSettles() {
+    const refresh = () => {
+      win.requestAnimationFrame(() => ScrollTrigger.refresh());
+    };
+
+    listen(win, "load", refresh, { once: true });
+
+    if (doc.fonts && doc.fonts.ready) {
+      doc.fonts.ready.then(refresh).catch(() => undefined);
+    }
+
+    win.setTimeout(refresh, 650);
+  }
 
   function init() {
     gsap.defaults({ overwrite: "auto" });
+
     ScrollTrigger.config({
       ignoreMobileResize: true,
-      autoRefreshEvents: isMobileLike ? "visibilitychange,DOMContentLoaded,load" : "visibilitychange,DOMContentLoaded,load,resize",
+      autoRefreshEvents: isMobileLike
+        ? "visibilitychange,DOMContentLoaded,load"
+        : "visibilitychange,DOMContentLoaded,load,resize",
     });
 
-    mainCtx = gsap.context(() => {}, doc.documentElement);
-    initMobileViewportLock();
+    const modules = [
+      { name: "Lenis", init: initLenis },
+      { name: "Mobile viewport lock", init: initMobileViewportLock },
+      { name: "Hero canvas", init: initHeroCanvas },
+      { name: "Reduced hero", init: showReducedHero, enabled: reducedMotion },
+      { name: "Hero scrub", init: initHeroScrub, enabled: !reducedMotion },
+      { name: "Curtain", init: initCurtain, enabled: !reducedMotion },
+      { name: "Hero magnet", init: initHeroMagnet, enabled: !reducedMotion },
+      { name: "Dust", init: initDust },
+      { name: "Marquee", init: initMarquee },
+      { name: "Explore carousel", init: initExploreCarousel },
+      { name: "Layout refresh", init: refreshAfterLayoutSettles },
+    ];
 
-    initHeroCanvas();
-    initLenis();
+    mainContext = gsap.context(() => {
+      modules.forEach((module) => {
+        if (module.enabled === false) return;
 
-    if (reducedMotion) {
-      showReducedHero();
-    } else {
-      initScrollScrub();
-      initCurtain();
-    }
+        try {
+          module.init();
+        } catch (error) {
+          console.warn(`[home-clean.js] ${module.name} module failed.`, error);
+        }
+      });
+    });
 
-    initDust();
-    initMarquee();
-    initExploreCarousel();
-    initPastPerformances();
-    initFooter();
+    listen(win, "pagehide", () => {
+      cleanups.forEach((cleanup) => cleanup());
+      if (mainContext) mainContext.revert();
+    }, { once: true });
   }
 
   function startWhenReady() {
@@ -1412,12 +1270,13 @@
       }
 
       attempts += 1;
+
       if (attempts < maxAttempts) {
         win.setTimeout(tryStart, 50);
         return;
       }
 
-      console.warn("[home.js] GSAP and ScrollTrigger were not available before home.js timed out.");
+      console.warn("[home-clean.js] GSAP and ScrollTrigger were not available before timeout.");
     };
 
     tryStart();
