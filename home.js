@@ -34,9 +34,9 @@
     marqueeTrack: ".clt-home-marquee.is-track",
     marqueeSet: ".clt-home-marquee.is-set",
 
-    exploreSection: ".clt-home-explore",
-    exploreMask: ".clt-home-explore.is-mask",
-    exploreTrack: ".clt-home-explore.is-track",
+    exploreSection: "#explore",
+    exploreMask: "#explore-mask",
+    exploreTrack: "#explore-track",
     exploreCard: ".clt-home-explore.is-card",
     exploreLens: ".clt-home-carousel-lens",
   };
