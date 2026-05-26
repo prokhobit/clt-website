@@ -1192,6 +1192,7 @@
     let lastDragX = 0;
     let lastDragTime = 0;
     let dragVelocity = 0;
+    let previousScroll = getScrollY();
     const setTrackX = (x) => gsap.set(track, { x: wrapNegativeX(x, setWidth) });
     const isDragging = () => carouselIsDragging || Boolean(draggable && draggable.isDragging);
 
@@ -1275,7 +1276,29 @@
       })[0];
     }
 
+    const drift = () => {
+      const scroll = getScrollY();
+      const scrollDelta = scroll - previousScroll;
+      previousScroll = scroll;
+
+      const isDraggingNow = isDragging();
+      const hasMomentum = momentumTween && momentumTween.isActive();
+
+      if (isDraggingNow || hasMomentum) return;
+
+      const currentX = Number(gsap.getProperty(track, "x")) || 0;
+      const scrollPush = clamp(-18, 18, scrollDelta * 0.55);
+
+      if (scrollPush !== 0) {
+        setTrackX(currentX - scrollPush);
+        if (draggable) draggable.update();
+      }
+    };
+
+    gsap.ticker.add(drift);
+
     cleanups.push(() => {
+      gsap.ticker.remove(drift);
       if (carouselResizeCall) carouselResizeCall.kill();
       if (momentumTween) momentumTween.kill();
       if (draggable) draggable.kill();
@@ -1845,5 +1868,3 @@
     startWhenReady();
   }
 })();
-
-  </script>
