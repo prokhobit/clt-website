@@ -1,4 +1,3 @@
-
 (() => {
   "use strict";
 
@@ -42,6 +41,19 @@
     exploreTrack: "#explore-track",
     exploreCard: ".clt-home-explore.is-card",
     exploreLens: "#clt-home-carousel-lens",
+
+    termsButton: "#terms-btn",
+    privacyButton: "#privacy-btn",
+    termsModal: "#terms-modal",
+    privacyModal: "#privacy-modal",
+    legalModal: ".clt-home-legal-modal",
+    legalPanel: ".clt-home-legal-modal.is-panel",
+    legalBackdrop: ".clt-home-legal-modal.is-backdrop",
+    legalHeader: ".clt-home-legal-modal.is-header",
+    legalTitle: ".clt-home-legal-modal.is-title",
+    legalClose: ".clt-home-legal-modal.is-close",
+    legalBody: ".clt-home-legal-modal.is-body",
+    legalCloseTrigger: "[data-close]",
   };
 
   const FRAME_URLS = [
@@ -324,6 +336,12 @@
   let lenis = null;
   let lastKnownVelocity = 0;
 
+  let heroCanvasCssWidth = 0;
+  let heroCanvasCssHeight = 0;
+  let heroCanvasPixelWidth = 0;
+  let heroCanvasPixelHeight = 0;
+  let heroCanvasResizeQueued = false;
+
   const frames = new Array(frameCount);
   const framePromises = new Array(frameCount);
 
@@ -401,20 +419,52 @@
     );
   }
 
-  function resizeHeroCanvas() {
+  function getCanvasDpr() {
+    return Math.min(win.devicePixelRatio || 1, isMobileLike ? 1.25 : 2);
+  }
+
+  function resizeHeroCanvasFromCache(width, height) {
     if (!heroCanvas || !heroCanvasContext) return;
 
-    const rect = heroCanvas.getBoundingClientRect();
-    const dpr = Math.min(win.devicePixelRatio || 1, isMobileLike ? 1.25 : 2);
-    const width = Math.max(1, Math.round(rect.width * dpr));
-    const height = Math.max(1, Math.round(rect.height * dpr));
+    const cssWidth = Math.max(1, Math.round(width || heroCanvasCssWidth || win.innerWidth || 1));
+    const cssHeight = Math.max(1, Math.round(height || heroCanvasCssHeight || ((win.visualViewport && win.visualViewport.height) || win.innerHeight) || 1));
+    const dpr = getCanvasDpr();
+    const pixelWidth = Math.round(cssWidth * dpr);
+    const pixelHeight = Math.round(cssHeight * dpr);
 
-    if (heroCanvas.width !== width || heroCanvas.height !== height) {
-      heroCanvas.width = width;
-      heroCanvas.height = height;
+    if (
+      pixelWidth === heroCanvasPixelWidth &&
+      pixelHeight === heroCanvasPixelHeight &&
+      heroCanvas.width === pixelWidth &&
+      heroCanvas.height === pixelHeight
+    ) {
+      return;
     }
 
+    heroCanvasCssWidth = cssWidth;
+    heroCanvasCssHeight = cssHeight;
+    heroCanvasPixelWidth = pixelWidth;
+    heroCanvasPixelHeight = pixelHeight;
+
+    heroCanvas.width = pixelWidth;
+    heroCanvas.height = pixelHeight;
+
     drawFrame(currentFrame);
+  }
+
+  function runQueuedHeroCanvasResize() {
+    heroCanvasResizeQueued = false;
+    resizeHeroCanvasFromCache();
+  }
+
+  function queueHeroCanvasResize(width, height) {
+    if (width) heroCanvasCssWidth = width;
+    if (height) heroCanvasCssHeight = height;
+
+    if (heroCanvasResizeQueued) return;
+
+    heroCanvasResizeQueued = true;
+    gsap.ticker.add(runQueuedHeroCanvasResize, true, true);
   }
 
   function scheduleIdle(callback) {
@@ -465,14 +515,22 @@
     heroCanvasContext = heroCanvas.getContext("2d", { alpha: false });
     if (!heroCanvasContext) return;
 
-    resizeHeroCanvas();
+    resizeHeroCanvasFromCache(win.innerWidth || 1, (win.visualViewport && win.visualViewport.height) || win.innerHeight || 1);
 
     if ("ResizeObserver" in win) {
-      resizeObserver = new ResizeObserver(resizeHeroCanvas);
+      resizeObserver = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+
+        queueHeroCanvasResize(entry.contentRect.width, entry.contentRect.height);
+      });
+
       resizeObserver.observe(heroCanvas);
       cleanups.push(() => resizeObserver.disconnect());
     } else {
-      listen(win, "resize", resizeHeroCanvas, { passive: true });
+      listen(win, "resize", () => {
+        queueHeroCanvasResize(win.innerWidth || 1, (win.visualViewport && win.visualViewport.height) || win.innerHeight || 1);
+      }, { passive: true });
     }
 
     preloadFrames();
@@ -632,8 +690,18 @@
     const moveY = gsap.quickTo(cta, "y", { duration: 0.28, ease: "power3.out" });
     const rotate = gsap.quickTo(cta, "rotation", { duration: 0.35, ease: "power3.out" });
 
+    let bounds = null;
+    let boundsCall = null;
+
+    const updateBounds = () => {
+      bounds = cta.getBoundingClientRect();
+    };
+
+    listen(cta, "pointerenter", updateBounds, { passive: true });
+
     listen(cta, "pointermove", (event) => {
-      const bounds = cta.getBoundingClientRect();
+      if (!bounds) updateBounds();
+
       const x = event.clientX - bounds.left - bounds.width / 2;
       const y = event.clientY - bounds.top - bounds.height / 2;
 
@@ -643,9 +711,23 @@
     }, { passive: true });
 
     listen(cta, "pointerleave", () => {
+      bounds = null;
       moveX(0);
       moveY(0);
       rotate(0);
+    });
+
+    listen(win, "resize", () => {
+      bounds = null;
+      if (boundsCall) boundsCall.kill();
+      boundsCall = gsap.delayedCall(0.18, () => {
+        if (doc.pointerLockElement !== cta) return;
+        updateBounds();
+      });
+    }, { passive: true });
+
+    cleanups.push(() => {
+      if (boundsCall) boundsCall.kill();
     });
   }
 
@@ -702,8 +784,6 @@
     const density = reducedMotion ? 0.35 : (isMobileLike ? 0.7 : dustDensity);
     const tones = ["warm", "warm", "warm", "brass", "brass", "cool"];
     const stars = [];
-    const wrapPercent = gsap.utils.wrap(0, 100);
-
     const spawn = (container, count, minSize, maxSize, depth) => {
       if (!container) return;
 
@@ -722,7 +802,7 @@
         element.style.height = `${size}px`;
         element.style.left = `${baseX}%`;
         element.style.top = `${baseY}%`;
-        element.style.willChange = "transform, top, opacity";
+        element.style.willChange = "transform, opacity";
         element.style.setProperty("--twinkle-dur", `${random(2.4, 7.2)}s`);
         element.style.setProperty("--twinkle-delay", `${random(0, 5.5)}s`);
         element.style.setProperty("--twinkle-lo", random(0.15, 0.36).toFixed(2));
@@ -798,7 +878,7 @@
       scrollImpulse += clamp(-90, 90, scrollDelta);
 
       stars.forEach((star) => {
-        const parallaxTop = wrapPercent(star.baseY - scroll * 0.0065 * star.depth);
+        const parallaxY = -scroll * 0.065 * star.depth;
         const targetInertiaY = -scrollImpulse * 0.085 * star.depth;
         const targetInertiaX = pointerImpulseX * 0.08 * star.depth;
         const targetPointerY = pointerImpulseY * 0.035 * star.depth;
@@ -810,10 +890,9 @@
         const stretch = clamp(1, 1.72, 1 + (Math.abs(velocity) / 4200) * 0.48 * star.depth);
         const rotate = clamp(-14, 14, (scrollDelta * 0.08 + pointerImpulseX * 0.05) * star.depth);
 
-        star.element.style.top = `${parallaxTop}%`;
         star.setCss({
           x: star.floatX + star.inertiaX,
-          y: star.floatY + star.inertiaY + star.pointerY,
+          y: parallaxY + star.floatY + star.inertiaY + star.pointerY,
           scaleY: stretch,
           rotation: rotate,
           force3D: true,
@@ -891,7 +970,7 @@
       if (hero) hero.style.minHeight = `${height}px`;
       if (heroPin) heroPin.style.minHeight = `${Math.round(height * pinMultiplier)}px`;
 
-      resizeHeroCanvas();
+      resizeHeroCanvasFromCache(win.innerWidth || 1, height);
       ScrollTrigger.refresh();
     };
 
@@ -961,11 +1040,32 @@
     let direction = 1;
     let isHovering = false;
 
+    let marqueeSizeDirty = true;
+    let marqueeResizeCall = null;
+
     const updateWidth = () => {
-      setWidth = Math.max(1, firstSet.getBoundingClientRect().width);
+      if (!marqueeSizeDirty) return;
+
+      marqueeSizeDirty = false;
+      setWidth = Math.max(1, firstSet.scrollWidth || 1);
     };
 
     updateWidth();
+
+    if ("ResizeObserver" in win) {
+      const marqueeObserver = new ResizeObserver(() => {
+        marqueeSizeDirty = true;
+
+        if (marqueeResizeCall) marqueeResizeCall.kill();
+        marqueeResizeCall = gsap.delayedCall(0.12, () => {
+          updateWidth();
+          marqueeTween.invalidate();
+        });
+      });
+
+      marqueeObserver.observe(firstSet);
+      cleanups.push(() => marqueeObserver.disconnect());
+    }
 
     const marqueeTween = gsap.to(track, {
       x: () => -setWidth,
@@ -996,9 +1096,18 @@
     });
 
     listen(win, "resize", () => {
-      updateWidth();
-      marqueeTween.invalidate();
+      marqueeSizeDirty = true;
+
+      if (marqueeResizeCall) marqueeResizeCall.kill();
+      marqueeResizeCall = gsap.delayedCall(0.18, () => {
+        updateWidth();
+        marqueeTween.invalidate();
+      });
     }, { passive: true });
+
+    cleanups.push(() => {
+      if (marqueeResizeCall) marqueeResizeCall.kill();
+    });
 
     ScrollTrigger.create({
       trigger: section,
@@ -1037,23 +1146,31 @@
       track.dataset.clonesReady = "true";
     }
 
+    const allCards = queryAll(SELECTOR.exploreCard, track);
+
     let setWidth = 1;
+    let carouselSizeDirty = true;
+    let carouselResizeCall = null;
+    let carouselIsDragging = false;
 
     const updateSetWidth = () => {
-      const styles = win.getComputedStyle(track);
-      const gap = parseFloat(styles.columnGap || styles.gap) || 24;
-      const cardsWidth = originalCards.reduce((total, card) => {
-        return total + card.getBoundingClientRect().width;
-      }, 0);
+      if (!carouselSizeDirty) return;
 
-      setWidth = Math.max(1, cardsWidth + gap * originalCards.length);
+      carouselSizeDirty = false;
+      setWidth = Math.max(1, track.scrollWidth / 2);
 
       const currentX = Number(gsap.getProperty(track, "x")) || 0;
       gsap.set(track, { x: wrapNegativeX(currentX, setWidth) });
     };
 
     updateSetWidth();
-    listen(win, "resize", updateSetWidth, { passive: true });
+
+    listen(win, "resize", () => {
+      carouselSizeDirty = true;
+
+      if (carouselResizeCall) carouselResizeCall.kill();
+      carouselResizeCall = gsap.delayedCall(0.18, updateSetWidth);
+    }, { passive: true });
 
     gsap.fromTo(section, {
       autoAlpha: 0,
@@ -1075,9 +1192,8 @@
     let lastDragX = 0;
     let lastDragTime = 0;
     let dragVelocity = 0;
-    let previousScroll = getScrollY();
-
     const setTrackX = (x) => gsap.set(track, { x: wrapNegativeX(x, setWidth) });
+    const isDragging = () => carouselIsDragging || Boolean(draggable && draggable.isDragging);
 
     const releaseMomentum = () => {
       const startX = Number(gsap.getProperty(track, "x")) || 0;
@@ -1100,6 +1216,8 @@
       });
     };
 
+    initExploreCardHovers(allCards, isDragging);
+
     if (Draggable) {
       draggable = Draggable.create(track, {
         type: "x",
@@ -1107,13 +1225,23 @@
         allowContextMenu: true,
         dragClickables: true,
         onPress() {
+          carouselIsDragging = true;
+          mask.classList.add("clt-state-dragging");
+
+          if (carouselSizeDirty) updateSetWidth();
           if (momentumTween) momentumTween.kill();
 
           lastDragX = this.x;
           lastDragTime = performance.now();
           dragVelocity = 0;
 
-          gsap.to(mask, { rotation: -1.5, duration: 0.25, ease: "power2.out" });
+          gsap.to(mask, {
+            rotation: -1.15,
+            duration: 0.22,
+            ease: "power2.out",
+            overwrite: true,
+            force3D: true,
+          });
         },
         onDrag() {
           const now = performance.now();
@@ -1132,59 +1260,169 @@
           }
         },
         onRelease() {
-          gsap.to(mask, { rotation: 0, duration: 0.55, ease: "elastic.out(1, 0.55)" });
+          carouselIsDragging = false;
+          mask.classList.remove("clt-state-dragging");
+
+          gsap.to(mask, {
+            rotation: 0,
+            duration: 0.52,
+            ease: "elastic.out(1, 0.55)",
+            overwrite: true,
+            force3D: true,
+          });
         },
         onDragEnd: releaseMomentum,
       })[0];
     }
 
-    const drift = () => {
-      const scroll = getScrollY();
-      const scrollDelta = scroll - previousScroll;
-      previousScroll = scroll;
-
-      const isDragging = draggable && draggable.isDragging;
-      const hasMomentum = momentumTween && momentumTween.isActive();
-
-      if (isDragging || hasMomentum) return;
-
-      const currentX = Number(gsap.getProperty(track, "x")) || 0;
-      const autoDrift = reducedMotion ? 0 : (isMobileLike ? 0.22 : 0.36);
-      const scrollPush = clamp(-18, 18, scrollDelta * 0.55);
-
-      setTrackX(currentX - autoDrift - scrollPush);
-
-      if (draggable) draggable.update();
-    };
-
-    gsap.ticker.add(drift);
     cleanups.push(() => {
-      gsap.ticker.remove(drift);
+      if (carouselResizeCall) carouselResizeCall.kill();
       if (momentumTween) momentumTween.kill();
       if (draggable) draggable.kill();
       gsap.set(track, { clearProps: "transform" });
     });
 
-    initExploreLens(mask, track);
+    initExploreLens(mask, isDragging);
   }
 
-  function initExploreLens(mask, track) {
+  function initExploreCardHovers(cards, isCarouselDragging) {
+    if (!cards.length || isTouch) return;
+
+    cards.forEach((card) => {
+      const image = query(".clt-home-explore.is-card-img", card);
+      const staticLayer = query(".clt-home-explore.is-card-static", card);
+      const overlay = query(".clt-home-explore.is-card-overlay", card);
+      const overlayInner = query(".clt-home-explore.is-card-overlay-inner", card);
+      const overlayItems = queryAll(".clt-home-explore.is-card-desc, .clt-home-explore.is-card-sep, .clt-home-explore.is-card-meta", card);
+
+      gsap.set(card, {
+        scale: 0.95,
+        filter: "brightness(0.7) saturate(0.82)",
+        transformOrigin: "50% 50%",
+        force3D: true,
+      });
+
+      gsap.set(image, {
+        scale: 1.02,
+        filter: "saturate(0.98) contrast(1)",
+        transformOrigin: "50% 50%",
+        force3D: true,
+      });
+
+      gsap.set(staticLayer, {
+        y: 0,
+        autoAlpha: 1,
+        force3D: true,
+      });
+
+      gsap.set(overlay, {
+        autoAlpha: 0,
+        y: 18,
+        force3D: true,
+      });
+
+      gsap.set(overlayInner, {
+        autoAlpha: 0,
+        y: 14,
+        scale: 0.965,
+        transformOrigin: "50% 100%",
+        force3D: true,
+      });
+
+      gsap.set(overlayItems, {
+        autoAlpha: 0,
+        y: 8,
+        force3D: true,
+      });
+
+      const hoverTimeline = gsap.timeline({
+        paused: true,
+        defaults: {
+          ease: "power3.out",
+          overwrite: "auto",
+        },
+      });
+
+      hoverTimeline
+        .to(card, {
+          scale: 0.985,
+          filter: "brightness(0.86) saturate(0.94)",
+          duration: reducedMotion ? 0.01 : 0.34,
+        }, 0)
+        .to(image, {
+          scale: 1.075,
+          filter: "saturate(1.08) contrast(1.04)",
+          duration: reducedMotion ? 0.01 : 0.62,
+          ease: "power2.out",
+        }, 0)
+        .to(staticLayer, {
+          y: -6,
+          autoAlpha: 0.92,
+          duration: reducedMotion ? 0.01 : 0.34,
+        }, 0)
+        .to(overlay, {
+          autoAlpha: 1,
+          y: 0,
+          duration: reducedMotion ? 0.01 : 0.32,
+        }, 0.04)
+        .to(overlayInner, {
+          autoAlpha: 1,
+          y: 0,
+          scale: 1,
+          duration: reducedMotion ? 0.01 : 0.44,
+          ease: "expo.out",
+        }, 0.06)
+        .to(overlayItems, {
+          autoAlpha: 1,
+          y: 0,
+          duration: reducedMotion ? 0.01 : 0.32,
+          stagger: 0.035,
+        }, 0.16);
+
+      listen(card, "pointerenter", () => {
+        if (isCarouselDragging && isCarouselDragging()) return;
+
+        card.classList.add("clt-state-hovered");
+        hoverTimeline.timeScale(1).play();
+      }, { passive: true });
+
+      listen(card, "pointerleave", () => {
+        card.classList.remove("clt-state-hovered");
+        hoverTimeline.timeScale(1.35).reverse();
+      }, { passive: true });
+
+      listen(card, "pointerdown", () => {
+        card.classList.remove("clt-state-hovered");
+        hoverTimeline.timeScale(1.65).reverse();
+      }, { passive: true });
+
+      cleanups.push(() => {
+        hoverTimeline.kill();
+      });
+    });
+  }
+
+  function initExploreLens(mask, isCarouselDragging) {
     const lens = query(SELECTOR.exploreLens);
     if (!lens || !mask || isTouch) return;
 
     gsap.set(lens, {
+      x: 0,
+      y: 0,
       xPercent: -50,
       yPercent: -50,
       rotation: 0,
-      scale: 1,
+      scale: 0.82,
       autoAlpha: 0,
       pointerEvents: "none",
       zIndex: 9999,
+      force3D: true,
     });
 
-    const moveX = gsap.quickTo(lens, "left", { duration: 0.12, ease: "power2.out" });
-    const moveY = gsap.quickTo(lens, "top", { duration: 0.12, ease: "power2.out" });
-    const rotate = gsap.quickTo(lens, "rotation", { duration: 0.2, ease: "power3.out" });
+    const moveX = gsap.quickTo(lens, "x", { duration: 0.16, ease: "power3.out" });
+    const moveY = gsap.quickTo(lens, "y", { duration: 0.16, ease: "power3.out" });
+    const rotate = gsap.quickTo(lens, "rotation", { duration: 0.24, ease: "power3.out" });
+    const scale = gsap.quickTo(lens, "scale", { duration: 0.18, ease: "power3.out" });
 
     let isOver = false;
     let isDown = false;
@@ -1193,15 +1431,31 @@
     const show = () => {
       lens.classList.remove("clt-home-is-hidden");
       lens.classList.add("clt-state-visible");
-      gsap.to(lens, { autoAlpha: 1, scale: isDown ? 0.82 : 1, duration: 0.18, overwrite: true });
+
+      gsap.to(lens, {
+        autoAlpha: 1,
+        duration: reducedMotion ? 0.01 : 0.16,
+        ease: "power2.out",
+        overwrite: "auto",
+      });
+
+      scale(isDown ? 0.86 : 1);
     };
 
     const hide = () => {
       isOver = false;
       isDown = false;
+
       lens.classList.remove("clt-state-visible", "clt-state-dragging", "clt-home-is-hidden");
       rotate(0);
-      gsap.to(lens, { autoAlpha: 0, scale: 0.9, duration: 0.18, overwrite: true });
+      scale(0.82);
+
+      gsap.to(lens, {
+        autoAlpha: 0,
+        duration: reducedMotion ? 0.01 : 0.18,
+        ease: "power2.out",
+        overwrite: "auto",
+      });
     };
 
     const move = (event) => {
@@ -1211,7 +1465,9 @@
       moveX(event.clientX);
       moveY(event.clientY);
 
-      if (isOver) rotate(clamp(-12, 12, deltaX * 0.35));
+      if (isOver && !(isCarouselDragging && isCarouselDragging())) {
+        rotate(clamp(-10, 10, deltaX * 0.28));
+      }
     };
 
     listen(mask, "pointerenter", (event) => {
@@ -1219,7 +1475,7 @@
       lastX = event.clientX;
       move(event);
       show();
-    });
+    }, { passive: true });
 
     listen(mask, "pointermove", (event) => {
       if (!isOver) {
@@ -1230,20 +1486,270 @@
       move(event);
     }, { passive: true });
 
-    listen(mask, "pointerleave", hide);
+    listen(mask, "pointerleave", hide, { passive: true });
+    listen(win, "blur", hide, { passive: true });
 
     listen(mask, "pointerdown", (event) => {
       isDown = true;
       lens.classList.add("clt-state-dragging");
       move(event);
       show();
-    });
+      scale(0.86);
+      rotate(0);
+    }, { passive: true });
 
     listen(win, "pointerup", () => {
       if (!isDown) return;
+
       isDown = false;
       lens.classList.remove("clt-state-dragging");
-      if (isOver) show();
+
+      if (isOver) {
+        show();
+      } else {
+        hide();
+      }
+    }, { passive: true });
+  }
+
+  function initLegalModals() {
+    const termsButton = query(SELECTOR.termsButton);
+    const privacyButton = query(SELECTOR.privacyButton);
+    const termsModal = query(SELECTOR.termsModal);
+    const privacyModal = query(SELECTOR.privacyModal);
+    const modalPairs = [
+      [termsButton, termsModal],
+      [privacyButton, privacyModal],
+    ];
+
+    let activeModal = null;
+    let activeTimeline = null;
+    let lastFocusedElement = null;
+
+    const partsFor = (modal) => {
+      const body = query(SELECTOR.legalBody, modal);
+
+      return {
+        panel: query(SELECTOR.legalPanel, modal),
+        backdrop: query(SELECTOR.legalBackdrop, modal),
+        header: query(SELECTOR.legalHeader, modal),
+        title: query(SELECTOR.legalTitle, modal),
+        close: query(SELECTOR.legalClose, modal),
+        body,
+        bodyChildren: body ? Array.from(body.children) : [],
+      };
+    };
+
+    const prepareModal = (modal) => {
+      if (!modal) return;
+
+      const parts = partsFor(modal);
+
+      modal.setAttribute("aria-hidden", "true");
+
+      gsap.set(modal, {
+        autoAlpha: 0,
+        pointerEvents: "none",
+      });
+
+      gsap.set(parts.backdrop, {
+        autoAlpha: 0,
+        scale: 1.035,
+      });
+
+      gsap.set(parts.panel, {
+        autoAlpha: 0,
+        y: reducedMotion ? 0 : 34,
+        scale: reducedMotion ? 1 : 0.94,
+        rotateX: reducedMotion ? 0 : -7,
+        transformOrigin: "50% 45%",
+        filter: reducedMotion ? "none" : "blur(10px)",
+      });
+
+      gsap.set([parts.header, parts.title, parts.close].filter(Boolean), {
+        autoAlpha: 0,
+        y: reducedMotion ? 0 : -10,
+      });
+
+      gsap.set(parts.bodyChildren, {
+        autoAlpha: 0,
+        y: reducedMotion ? 0 : 18,
+        filter: reducedMotion ? "none" : "blur(8px)",
+      });
+    };
+
+    const stopPageScroll = () => {
+      doc.documentElement.classList.add("clt-modal-is-open");
+      doc.body.style.overflow = "hidden";
+
+      if (lenis && typeof lenis.stop === "function") lenis.stop();
+    };
+
+    const startPageScroll = () => {
+      doc.documentElement.classList.remove("clt-modal-is-open");
+      doc.body.style.overflow = "";
+
+      if (lenis && typeof lenis.start === "function") lenis.start();
+    };
+
+    const focusableIn = (modal) => {
+      return queryAll(`${SELECTOR.legalClose}, .clt-button, a[href], button:not([disabled])`, modal)
+        .filter((element) => element.offsetParent !== null || element === query(SELECTOR.legalClose, modal));
+    };
+
+    const openModal = (modal) => {
+      if (!modal || modal === activeModal) return;
+
+      if (activeModal) closeModal(activeModal, true);
+
+      const parts = partsFor(modal);
+
+      activeModal = modal;
+      lastFocusedElement = doc.activeElement;
+
+      if (activeTimeline) activeTimeline.kill();
+
+      prepareModal(modal);
+      stopPageScroll();
+
+      modal.classList.add("clt-state-open", "clt-state-animating");
+      modal.setAttribute("aria-hidden", "false");
+
+      activeTimeline = gsap.timeline({
+        defaults: { ease: "power3.out" },
+        onComplete() {
+          modal.classList.remove("clt-state-animating");
+
+          if (parts.panel) {
+            parts.panel.setAttribute("tabindex", "-1");
+            parts.panel.focus({ preventScroll: true });
+          }
+        },
+      });
+
+      activeTimeline
+        .set(modal, { pointerEvents: "auto" })
+        .to(modal, {
+          autoAlpha: 1,
+          duration: reducedMotion ? 0.01 : 0.18,
+        }, 0)
+        .to(parts.backdrop, {
+          autoAlpha: 1,
+          scale: 1,
+          duration: reducedMotion ? 0.01 : 0.42,
+        }, 0)
+        .to(parts.panel, {
+          autoAlpha: 1,
+          y: 0,
+          scale: 1,
+          rotateX: 0,
+          filter: "blur(0px)",
+          duration: reducedMotion ? 0.01 : 0.62,
+          ease: "expo.out",
+        }, 0.06)
+        .to([parts.header, parts.title, parts.close].filter(Boolean), {
+          autoAlpha: 1,
+          y: 0,
+          duration: reducedMotion ? 0.01 : 0.36,
+          stagger: 0.035,
+        }, 0.2)
+        .to(parts.bodyChildren, {
+          autoAlpha: 1,
+          y: 0,
+          filter: "blur(0px)",
+          duration: reducedMotion ? 0.01 : 0.48,
+          stagger: 0.045,
+        }, 0.28);
+    };
+
+    function closeModal(modal, instant) {
+      if (!modal) return;
+
+      const parts = partsFor(modal);
+
+      if (activeTimeline) activeTimeline.kill();
+
+      modal.classList.add("clt-state-animating");
+
+      activeTimeline = gsap.timeline({
+        defaults: { ease: "power2.inOut" },
+        onComplete() {
+          modal.classList.remove("clt-state-open", "clt-state-animating");
+          modal.setAttribute("aria-hidden", "true");
+
+          gsap.set(modal, {
+            autoAlpha: 0,
+            pointerEvents: "none",
+          });
+
+          activeModal = null;
+          startPageScroll();
+
+          if (lastFocusedElement && typeof lastFocusedElement.focus === "function") {
+            lastFocusedElement.focus({ preventScroll: true });
+          }
+
+          lastFocusedElement = null;
+        },
+      });
+
+      activeTimeline
+        .to(parts.panel, {
+          autoAlpha: 0,
+          y: instant || reducedMotion ? 0 : 18,
+          scale: instant || reducedMotion ? 1 : 0.965,
+          rotateX: instant || reducedMotion ? 0 : 4,
+          filter: instant || reducedMotion ? "none" : "blur(8px)",
+          duration: instant || reducedMotion ? 0.01 : 0.26,
+        }, 0)
+        .to(parts.backdrop, {
+          autoAlpha: 0,
+          scale: instant || reducedMotion ? 1 : 1.02,
+          duration: instant || reducedMotion ? 0.01 : 0.3,
+        }, 0.04)
+        .to(modal, {
+          autoAlpha: 0,
+          duration: instant || reducedMotion ? 0.01 : 0.26,
+        }, 0.08);
+    }
+
+    [termsModal, privacyModal].filter(Boolean).forEach((modal) => {
+      prepareModal(modal);
+
+      queryAll(SELECTOR.legalCloseTrigger, modal).forEach((trigger) => {
+        listen(trigger, "click", () => closeModal(modal));
+      });
+    });
+
+    modalPairs.forEach(([button, modal]) => {
+      if (!button || !modal) return;
+      listen(button, "click", () => openModal(modal));
+    });
+
+    listen(win, "keydown", (event) => {
+      if (event.key === "Escape" && activeModal) {
+        closeModal(activeModal);
+        return;
+      }
+
+      if (event.key !== "Tab" || !activeModal) return;
+
+      const focusable = focusableIn(activeModal);
+      if (!focusable.length) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && doc.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+        return;
+      }
+
+      if (!event.shiftKey && doc.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     });
   }
 
@@ -1283,6 +1789,7 @@
       { name: "Dust", init: initDust },
       { name: "Marquee", init: initMarquee },
       { name: "Explore carousel", init: initExploreCarousel },
+      { name: "Legal modals", init: initLegalModals },
       { name: "Layout refresh", init: refreshAfterLayoutSettles },
     ];
 
@@ -1338,3 +1845,5 @@
     startWhenReady();
   }
 })();
+
+  </script>
