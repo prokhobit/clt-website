@@ -738,35 +738,79 @@
   }
 
   function initLenis() {
-    if (reducedMotion || isMobileLike || !Lenis) return;
+  if (reducedMotion || isMobileLike) return;
 
-    lenis = new Lenis({
-      lerp: 0.08,
-      smoothWheel: true,
-      wheelMultiplier: 0.9,
-      touchMultiplier: 1.25,
-      infinite: false,
-    });
+  const globalLenis = win.CLT_LENIS || win.lenis;
+  let ownsLenis = false;
 
-    const updateLenis = (time) => {
-      lenis.raf(time * 1000);
-    };
+  const handleScroll = (event) => {
+    lastKnownVelocity = typeof event.velocity === "number" ? event.velocity : 0;
+    ScrollTrigger.update();
+  };
 
-    gsap.ticker.add(updateLenis);
-    gsap.ticker.lagSmoothing(0);
-
-    lenis.on("scroll", (event) => {
-      lastKnownVelocity = typeof event.velocity === "number" ? event.velocity : 0;
-      ScrollTrigger.update();
-    });
+  if (globalLenis && typeof globalLenis.raf === "function") {
+    lenis = globalLenis;
+    lenis.on("scroll", handleScroll);
 
     cleanups.push(() => {
-      gsap.ticker.remove(updateLenis);
-      if (lenis && typeof lenis.destroy === "function") lenis.destroy();
+      if (lenis && typeof lenis.off === "function") {
+        lenis.off("scroll", handleScroll);
+      }
+
       lenis = null;
       lastKnownVelocity = 0;
     });
+
+    return;
   }
+
+  if (!Lenis) return;
+
+  lenis = new Lenis({
+    lerp: 0.08,
+    smoothWheel: true,
+    wheelMultiplier: 0.9,
+    touchMultiplier: 1.25,
+    infinite: false,
+    autoRaf: false
+  });
+
+  ownsLenis = true;
+  win.CLT_LENIS = lenis;
+  win.lenis = lenis;
+
+  const updateLenis = (time) => {
+    lenis.raf(time * 1000);
+  };
+
+  gsap.ticker.add(updateLenis);
+  gsap.ticker.lagSmoothing(0);
+
+  lenis.on("scroll", handleScroll);
+
+  cleanups.push(() => {
+    gsap.ticker.remove(updateLenis);
+
+    if (lenis && typeof lenis.off === "function") {
+      lenis.off("scroll", handleScroll);
+    }
+
+    if (ownsLenis && lenis && typeof lenis.destroy === "function") {
+      lenis.destroy();
+    }
+
+    if (ownsLenis && win.CLT_LENIS === lenis) {
+      win.CLT_LENIS = null;
+    }
+
+    if (ownsLenis && win.lenis === lenis) {
+      win.lenis = null;
+    }
+
+    lenis = null;
+    lastKnownVelocity = 0;
+  });
+}
 
   function initDust() {
     const far = query(SELECTOR.dustFar);
