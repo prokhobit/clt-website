@@ -7,7 +7,24 @@
   let gsap = win.gsap;
   let ScrollTrigger = win.ScrollTrigger;
   let Draggable = win.Draggable;
-  let Lenis = win.Lenis;
+
+  let pluginsReady = false;
+  let hasStarted = false;
+
+  function activateGsapPlugins() {
+    if (!gsap || pluginsReady) return;
+
+    const plugins = [];
+
+    if (ScrollTrigger) plugins.push(ScrollTrigger);
+    if (Draggable) plugins.push(Draggable);
+
+    if (plugins.length && typeof gsap["registerPlugin"] === "function") {
+      gsap["registerPlugin"](...plugins);
+    }
+
+    pluginsReady = true;
+  }
 
   const SELECTOR = {
     // Matched to commonwealth-lyric-webflow.html.
@@ -327,6 +344,18 @@
     cleanups.push(cleanup);
     return cleanup;
   };
+
+  function runCleanups() {
+    while (cleanups.length) {
+      const cleanup = cleanups.pop();
+
+      try {
+        cleanup();
+      } catch (error) {
+        console.warn("[home-clean.js] Cleanup failed.", error);
+      }
+    }
+  }
 
   let mainContext = null;
   let heroCanvas = null;
@@ -733,24 +762,38 @@
 
 
   function getScrollY() {
-    if (lenis && typeof lenis.scroll === "number") return lenis.scroll;
+    const globalLenis = win.CLT_LENIS || win.lenis;
+
+    if (globalLenis && typeof globalLenis.scroll === "number") {
+      return globalLenis.scroll;
+    }
+
     return win.scrollY || doc.documentElement.scrollTop || 0;
   }
 
   function initLenis() {
-  if (reducedMotion || isMobileLike) return;
+    if (reducedMotion || isMobileLike) return;
 
-  const globalLenis = win.CLT_LENIS || win.lenis;
-  let ownsLenis = false;
+    const globalLenis = win.CLT_LENIS || win.lenis;
 
-  const handleScroll = (event) => {
-    lastKnownVelocity = typeof event.velocity === "number" ? event.velocity : 0;
-    ScrollTrigger.update();
-  };
+    if (!globalLenis) {
+      console.warn("[home-clean.js] Global Lenis was not found. Home animations will use native scroll.");
+      return;
+    }
 
-  if (globalLenis && typeof globalLenis.raf === "function") {
     lenis = globalLenis;
-    lenis.on("scroll", handleScroll);
+
+    const handleScroll = (event) => {
+      lastKnownVelocity = typeof event.velocity === "number" ? event.velocity : 0;
+
+      if (ScrollTrigger && typeof ScrollTrigger.update === "function") {
+        ScrollTrigger.update();
+      }
+    };
+
+    if (typeof lenis.on === "function") {
+      lenis.on("scroll", handleScroll);
+    }
 
     cleanups.push(() => {
       if (lenis && typeof lenis.off === "function") {
@@ -760,57 +803,7 @@
       lenis = null;
       lastKnownVelocity = 0;
     });
-
-    return;
   }
-
-  if (!Lenis) return;
-
-  lenis = new Lenis({
-    lerp: 0.08,
-    smoothWheel: true,
-    wheelMultiplier: 0.9,
-    touchMultiplier: 1.25,
-    infinite: false,
-    autoRaf: false
-  });
-
-  ownsLenis = true;
-  win.CLT_LENIS = lenis;
-  win.lenis = lenis;
-
-  const updateLenis = (time) => {
-    lenis.raf(time * 1000);
-  };
-
-  gsap.ticker.add(updateLenis);
-  gsap.ticker.lagSmoothing(0);
-
-  lenis.on("scroll", handleScroll);
-
-  cleanups.push(() => {
-    gsap.ticker.remove(updateLenis);
-
-    if (lenis && typeof lenis.off === "function") {
-      lenis.off("scroll", handleScroll);
-    }
-
-    if (ownsLenis && lenis && typeof lenis.destroy === "function") {
-      lenis.destroy();
-    }
-
-    if (ownsLenis && win.CLT_LENIS === lenis) {
-      win.CLT_LENIS = null;
-    }
-
-    if (ownsLenis && win.lenis === lenis) {
-      win.lenis = null;
-    }
-
-    lenis = null;
-    lastKnownVelocity = 0;
-  });
-}
 
   function initDust() {
     const far = query(SELECTOR.dustFar);
@@ -1822,7 +1815,11 @@
 
   function refreshAfterLayoutSettles() {
     const refresh = () => {
-      win.requestAnimationFrame(() => ScrollTrigger.refresh());
+      if (!ScrollTrigger || typeof ScrollTrigger.refresh !== "function") return;
+
+      win.requestAnimationFrame(() => {
+        ScrollTrigger.refresh();
+      });
     };
 
     listen(win, "load", refresh, { once: true });
@@ -1835,6 +1832,11 @@
   }
 
   function init() {
+    if (hasStarted) return;
+
+    hasStarted = true;
+    activateGsapPlugins();
+
     gsap.defaults({ overwrite: "auto" });
 
     ScrollTrigger.config({
@@ -1845,7 +1847,7 @@
     });
 
     const modules = [
-      { name: "Lenis", init: initLenis },
+      { name: "Lenis bridge", init: initLenis },
       { name: "Mobile viewport lock", init: initMobileViewportLock },
       { name: "Hero pin guard", init: initHeroPinGuard },
       { name: "Hero canvas", init: initHeroCanvas },
@@ -1872,10 +1874,34 @@
       });
     });
 
-    listen(win, "pagehide", () => {
-      cleanups.forEach((cleanup) => cleanup());
-      if (mainContext) mainContext.revert();
+    listen(win, "pagehide", (event) => {
+      if (event.persisted) return;
+
+      runCleanups();
+
+      if (mainContext) {
+        mainContext.revert();
+        mainContext = null;
+      }
+
+      hasStarted = false;
     }, { once: true });
+
+    listen(win, "pageshow", (event) => {
+      if (!event.persisted) return;
+
+      const globalLenis = win.CLT_LENIS || win.lenis;
+
+      if (globalLenis && typeof globalLenis.resize === "function") {
+        globalLenis.resize();
+      }
+
+      if (ScrollTrigger && typeof ScrollTrigger.refresh === "function") {
+        win.requestAnimationFrame(() => {
+          ScrollTrigger.refresh();
+        });
+      }
+    });
   }
 
   function startWhenReady() {
@@ -1886,9 +1912,9 @@
       gsap = win.gsap;
       ScrollTrigger = win.ScrollTrigger;
       Draggable = win.Draggable;
-      Lenis = win.Lenis;
 
       if (gsap && ScrollTrigger) {
+        activateGsapPlugins();
         init();
         return;
       }
