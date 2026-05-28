@@ -2,7 +2,37 @@
 
 const win = window;const doc = document;
 
-let gsap = win.gsap;let ScrollTrigger = win.ScrollTrigger;let Draggable = win.Draggable;let Lenis = win.Lenis;
+let gsap = win.gsap;
+let ScrollTrigger = win.ScrollTrigger;
+let Draggable = win.Draggable;
+let Lenis = win.Lenis;
+
+let pluginsReady = false;
+let hasStarted = false;
+let isCleaningUp = false;
+
+if (typeof win.CLT_HOME_CLEANUP === "function") {
+  try {
+    win.CLT_HOME_CLEANUP({ reason: "reinit" });
+  } catch (error) {
+    console.warn("[home-clean.js] Previous cleanup failed.", error);
+  }
+}
+
+function activateGsapPlugins() {
+  if (!gsap || pluginsReady) return;
+
+  const plugins = [];
+
+  if (ScrollTrigger) plugins.push(ScrollTrigger);
+  if (Draggable) plugins.push(Draggable);
+
+  if (plugins.length && typeof gsap["registerPlugin"] === "function") {
+    gsap["registerPlugin"](...plugins);
+  }
+
+  pluginsReady = true;
+}
 
 const SELECTOR = {// Matched to commonwealth-lyric-webflow.html.heroSection: "#clt-home-hero",heroPin: '[data-gsap="home-hero-pin"]',heroCanvas: "#hero-canvas",heroReveal: '[data-gsap="home-hero-reveal"]',heroEyebrow: '[data-gsap="home-hero-eyebrow"]',heroLine: '[data-gsap="home-hero-line"]',heroCta: '[data-gsap="home-hero-cta"]',
 
@@ -423,35 +453,72 @@ cleanups.push(() => {
 
 function getScrollY() {if (lenis && typeof lenis.scroll === "number") return lenis.scroll;return win.scrollY || doc.documentElement.scrollTop || 0;}
 
-function initLenis() {if (reducedMotion || isMobileLike || !Lenis) return;
+function initLenis() {
+  if (reducedMotion || isMobileLike || !Lenis) return;
 
-lenis = new Lenis({
-  lerp: 0.08,
-  smoothWheel: true,
-  wheelMultiplier: 0.9,
-  touchMultiplier: 1.25,
-  infinite: false,
-});
+  let ownsLenis = false;
 
-const updateLenis = (time) => {
-  lenis.raf(time * 1000);
-};
+  const handleScroll = (event) => {
+    lastKnownVelocity = typeof event.velocity === "number" ? event.velocity : 0;
 
-gsap.ticker.add(updateLenis);
-gsap.ticker.lagSmoothing(0);
+    if (ScrollTrigger && typeof ScrollTrigger.update === "function") {
+      ScrollTrigger.update();
+    }
+  };
 
-lenis.on("scroll", (event) => {
-  lastKnownVelocity = typeof event.velocity === "number" ? event.velocity : 0;
-  ScrollTrigger.update();
-});
+  const existingLenis = win.CLT_HOME_LENIS;
 
-cleanups.push(() => {
-  gsap.ticker.remove(updateLenis);
-  if (lenis && typeof lenis.destroy === "function") lenis.destroy();
-  lenis = null;
-  lastKnownVelocity = 0;
-});
+  if (existingLenis && typeof existingLenis.raf === "function") {
+    lenis = existingLenis;
+  } else {
+    lenis = new Lenis({
+      lerp: 0.08,
+      smoothWheel: true,
+      wheelMultiplier: 0.9,
+      touchMultiplier: 1.25,
+      infinite: false,
+      autoRaf: false,
+    });
 
+    ownsLenis = true;
+    win.CLT_HOME_LENIS = lenis;
+    win.lenis = lenis;
+  }
+
+  const updateLenis = (time) => {
+    if (!lenis || typeof lenis.raf !== "function") return;
+    lenis.raf(time * 1000);
+  };
+
+  gsap.ticker.add(updateLenis);
+  gsap.ticker.lagSmoothing(0);
+
+  if (typeof lenis.on === "function") {
+    lenis.on("scroll", handleScroll);
+  }
+
+  cleanups.push(() => {
+    gsap.ticker.remove(updateLenis);
+
+    if (lenis && typeof lenis.off === "function") {
+      lenis.off("scroll", handleScroll);
+    }
+
+    if (ownsLenis && lenis && typeof lenis.destroy === "function") {
+      lenis.destroy();
+    }
+
+    if (ownsLenis && win.CLT_HOME_LENIS === lenis) {
+      win.CLT_HOME_LENIS = null;
+    }
+
+    if (ownsLenis && win.lenis === lenis) {
+      win.lenis = null;
+    }
+
+    lenis = null;
+    lastKnownVelocity = 0;
+  });
 }
 
 function initDust() {const far = query(SELECTOR.dustFar);const mid = query(SELECTOR.dustMid);const near = query(SELECTOR.dustNear);const root = query(SELECTOR.dustRoot);const containers = [far, mid, near].filter(Boolean);
@@ -1440,87 +1507,157 @@ listen(win, "keydown", (event) => {
 
 }
 
-function refreshAfterLayoutSettles() {const refresh = () => {win.requestAnimationFrame(() => ScrollTrigger.refresh());};
+function refreshAfterLayoutSettles() {
+  const refresh = () => {
+    if (!ScrollTrigger || typeof ScrollTrigger.refresh !== "function") return;
 
-listen(win, "load", refresh, { once: true });
+    win.requestAnimationFrame(() => {
+      ScrollTrigger.refresh();
+    });
+  };
 
-if (doc.fonts && doc.fonts.ready) {
-  doc.fonts.ready.then(refresh).catch(() => undefined);
+  listen(win, "load", refresh, { once: true });
+
+  if (doc.fonts && doc.fonts.ready) {
+    doc.fonts.ready.then(refresh).catch(() => undefined);
+  }
+
+  win.setTimeout(refresh, 650);
 }
 
-win.setTimeout(refresh, 650);
-
-}
-
-function init() {gsap.defaults({ overwrite: "auto" });
-
-ScrollTrigger.config({
-  ignoreMobileResize: true,
-  autoRefreshEvents: isMobileLike
-    ? "visibilitychange,DOMContentLoaded,load"
-    : "visibilitychange,DOMContentLoaded,load,resize",
-});
-
-const modules = [
-  { name: "Lenis", init: initLenis },
-  { name: "Mobile viewport lock", init: initMobileViewportLock },
-  { name: "Hero pin guard", init: initHeroPinGuard },
-  { name: "Hero canvas", init: initHeroCanvas },
-  { name: "Reduced hero", init: showReducedHero, enabled: reducedMotion },
-  { name: "Hero scrub", init: initHeroScrub, enabled: !reducedMotion },
-  { name: "Curtain", init: initCurtain, enabled: !reducedMotion },
-  { name: "Hero magnet", init: initHeroMagnet, enabled: !reducedMotion },
-  { name: "Dust", init: initDust },
-  { name: "Marquee", init: initMarquee },
-  { name: "Explore carousel", init: initExploreCarousel },
-  { name: "Legal modals", init: initLegalModals },
-  { name: "Layout refresh", init: refreshAfterLayoutSettles },
-];
-
-mainContext = gsap.context(() => {
-  modules.forEach((module) => {
-    if (module.enabled === false) return;
+function runCleanups() {
+  while (cleanups.length) {
+    const cleanup = cleanups.pop();
 
     try {
-      module.init();
+      cleanup();
     } catch (error) {
-      console.warn(`[home-clean.js] ${module.name} module failed.`, error);
+      console.warn("[home-clean.js] Cleanup failed.", error);
     }
-  });
-});
-
-listen(win, "pagehide", () => {
-  cleanups.forEach((cleanup) => cleanup());
-  if (mainContext) mainContext.revert();
-}, { once: true });
-
+  }
 }
 
-function startWhenReady() {let attempts = 0;const maxAttempts = 90;
+function performFullCleanup() {
+  if (isCleaningUp) return;
 
-const tryStart = () => {
-  gsap = win.gsap;
-  ScrollTrigger = win.ScrollTrigger;
-  Draggable = win.Draggable;
-  Lenis = win.Lenis;
+  isCleaningUp = true;
 
-  if (gsap && ScrollTrigger) {
-    init();
-    return;
+  runCleanups();
+
+  if (mainContext) {
+    try {
+      mainContext.revert();
+    } catch (error) {
+      console.warn("[home-clean.js] GSAP context revert failed.", error);
+    }
+
+    mainContext = null;
   }
 
-  attempts += 1;
-
-  if (attempts < maxAttempts) {
-    win.setTimeout(tryStart, 50);
-    return;
+  if (win.CLT_HOME_CLEANUP === performFullCleanup) {
+    win.CLT_HOME_CLEANUP = null;
   }
 
-  console.warn("[home-clean.js] GSAP and ScrollTrigger were not available before timeout.");
-};
+  hasStarted = false;
+  isCleaningUp = false;
+}
 
-tryStart();
+function restoreFromPageCache() {
+  if (lenis && typeof lenis.resize === "function") {
+    lenis.resize();
+  }
 
+  if (ScrollTrigger && typeof ScrollTrigger.refresh === "function") {
+    win.requestAnimationFrame(() => {
+      ScrollTrigger.refresh();
+    });
+  }
+}
+
+function init() {
+  if (hasStarted) return;
+
+  hasStarted = true;
+
+  activateGsapPlugins();
+
+  gsap.defaults({ overwrite: "auto" });
+
+  ScrollTrigger.config({
+    ignoreMobileResize: true,
+    autoRefreshEvents: isMobileLike
+      ? "visibilitychange,DOMContentLoaded,load"
+      : "visibilitychange,DOMContentLoaded,load,resize",
+  });
+
+  win.CLT_HOME_CLEANUP = performFullCleanup;
+
+  const modules = [
+    { name: "Lenis", init: initLenis },
+    { name: "Mobile viewport lock", init: initMobileViewportLock },
+    { name: "Hero pin guard", init: initHeroPinGuard },
+    { name: "Hero canvas", init: initHeroCanvas },
+    { name: "Reduced hero", init: showReducedHero, enabled: reducedMotion },
+    { name: "Hero scrub", init: initHeroScrub, enabled: !reducedMotion },
+    { name: "Curtain", init: initCurtain, enabled: !reducedMotion },
+    { name: "Hero magnet", init: initHeroMagnet, enabled: !reducedMotion },
+    { name: "Dust", init: initDust },
+    { name: "Marquee", init: initMarquee },
+    { name: "Explore carousel", init: initExploreCarousel },
+    { name: "Legal modals", init: initLegalModals },
+    { name: "Layout refresh", init: refreshAfterLayoutSettles },
+  ];
+
+  mainContext = gsap.context(() => {
+    modules.forEach((module) => {
+      if (module.enabled === false) return;
+
+      try {
+        module.init();
+      } catch (error) {
+        console.warn(`[home-clean.js] ${module.name} module failed.`, error);
+      }
+    });
+  });
+
+  listen(win, "pagehide", (event) => {
+    if (event.persisted) return;
+    performFullCleanup();
+  }, { once: true });
+
+  listen(win, "pageshow", (event) => {
+    if (!event.persisted) return;
+    restoreFromPageCache();
+  });
+}
+
+function startWhenReady() {
+  let attempts = 0;
+  const maxAttempts = 90;
+
+  const tryStart = () => {
+    gsap = win.gsap;
+    ScrollTrigger = win.ScrollTrigger;
+    Draggable = win.Draggable;
+    Lenis = win.Lenis;
+
+    if (gsap && ScrollTrigger && Draggable) {
+      activateGsapPlugins();
+      init();
+      return;
+    }
+
+    attempts += 1;
+
+    if (attempts < maxAttempts) {
+      win.setTimeout(tryStart, 50);
+      return;
+    }
+
+    console.warn("[home-clean.js] GSAP, ScrollTrigger, or Draggable were not available before timeout.");
+  };
+
+  tryStart();
 }
 
 if (doc.readyState === "loading") {doc.addEventListener("DOMContentLoaded", startWhenReady, { once: true });} else {startWhenReady();}})();
