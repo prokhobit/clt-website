@@ -646,11 +646,6 @@
         presents,
         { autoAlpha: 1, y: 0, filter: "blur(0rem)", duration: 0.28 },
         0.5,
-      )
-      .to(
-        cta,
-        { autoAlpha: 1, y: 0, filter: "blur(0rem)", duration: 0.34 },
-        0.62,
       );
   }
 
