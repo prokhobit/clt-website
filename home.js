@@ -1,87 +1,5 @@
-(() => {
-  "use strict";
 
-  const win = window;
-  const doc = document;
-
-  let gsap = win.gsap;
-  let ScrollTrigger = win.ScrollTrigger;
-  let Draggable = win.Draggable;
-  let Lenis = win.Lenis;
-
-  let pluginsReady = false;
-  let hasStarted = false;
-  let isCleaningUp = false;
-
-  if (typeof win.CLT_HOME_CLEANUP === "function") {
-    try {
-      win.CLT_HOME_CLEANUP({ reason: "reinit" });
-    } catch (error) {
-      console.warn("[home-clean.js] Previous cleanup failed.", error);
-    }
-  }
-
-  function activateGsapPlugins() {
-    if (!gsap || pluginsReady) return;
-
-    const plugins = [];
-
-    if (ScrollTrigger) plugins.push(ScrollTrigger);
-    if (Draggable) plugins.push(Draggable);
-
-    if (plugins.length && typeof gsap["registerPlugin"] === "function") {
-      gsap["registerPlugin"](...plugins);
-    }
-
-    pluginsReady = true;
-  }
-
-  const SELECTOR = {
-    heroSection: "#clt-home-hero",
-    heroPin: '[data-gsap="home-hero-pin"]',
-    heroCanvas: "#hero-canvas",
-    heroReveal: '[data-gsap="home-hero-reveal"]',
-    heroEyebrow: '[data-gsap="home-hero-eyebrow"]',
-    heroLine: '[data-gsap="home-hero-line"]',
-
-    curtainStage: '[data-gsap="home-curtain-stage"]',
-    curtainLeft: "#clt-home-curtain-left",
-    curtainRight: "#clt-home-curtain-right",
-    curtainPrompt: '[data-gsap="home-curtain-prompt"]',
-    curtainPanelTop: '[data-gsap="home-curtain-panel-top"]',
-
-    dustRoot: "#star-container",
-    dustFar: "#dust-far",
-    dustMid: "#dust-mid",
-    dustNear: "#dust-near",
-    dustParticle: ".clt-home-dust.is-particle",
-    page: ".clt-page",
-
-    marqueeSection: '[data-webflow-section="acclaim-marquee"]',
-    marqueeTrack: ".clt-home-marquee.is-track",
-    marqueeSet: ".clt-home-marquee.is-set",
-
-    exploreSection: "#explore",
-    exploreMask: "#explore-mask",
-    exploreTrack: "#explore-track",
-    exploreCard: ".clt-home-explore.is-card",
-    exploreLens: "#clt-home-carousel-lens",
-
-    termsButton: "#terms-btn",
-    privacyButton: "#privacy-btn",
-    termsModal: "#terms-modal",
-    privacyModal: "#privacy-modal",
-    legalModal: ".clt-home-legal-modal",
-    legalPanel: ".clt-home-legal-modal.is-panel",
-    legalBackdrop: ".clt-home-legal-modal.is-backdrop",
-    legalHeader: ".clt-home-legal-modal.is-header",
-    legalTitle: ".clt-home-legal-modal.is-title",
-    legalClose: ".clt-home-legal-modal.is-close",
-    legalBody: ".clt-home-legal-modal.is-body",
-    legalCloseTrigger: "[data-close]",
-  };
-
-  const FRAME_URLS = [
+window.CLT_HERO_FRAMES = [
     "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a35ad19668aae30c2f4_frame-0001.avif",
     "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a35c6cbe27116ca83fd_frame-0002.avif",
     "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a35e5fb917b3701b693_frame-0003.avif",
@@ -326,1025 +244,128 @@
     "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a540030b57ecf440576_frame-0248.avif",
     "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a54f29cfaca54deb5e2_frame-0249.avif",
     "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a54f4eec82dd5e0fca3_frame-0250.avif",
-  ];
+];
 
-  const reducedMotion = win.matchMedia(
-    "(prefers-reduced-motion: reduce)",
-  ).matches;
-  const isTouch = win.matchMedia("(pointer: coarse)").matches;
-  const isSmallViewport = win.matchMedia("(max-width: 760px)").matches;
-  const isMobileLike = isTouch || isSmallViewport;
-  const frameStep = isMobileLike ? 3 : 1;
+/* ============================================================================
+   CLT — Webflow homepage interactions
+   Separate-file build for Webflow native GSAP.
 
-  const frameCount = FRAME_URLS.length;
-  const titleRevealStart = 0.66;
-  const titleRevealEnd = 0.92;
-  const dustDensity = 1.32;
+   What this file owns:
+   - Hero canvas frame scrub
+   - Acclaim marquee with smooth scroll-direction + scroll-speed response
+   - Explore carousel drag, inertia, hover overlays, and cursor lens
+   - Recent gallery zoom / mobile card stack
+   - Section reveals and ScrollTrigger refresh after layout settles
+   ============================================================================ */
 
-  const clamp = (min, max, value) => Math.min(max, Math.max(min, value));
-  const random = (min, max) => min + Math.random() * (max - min);
-  const query = (selector, scope = doc) => scope.querySelector(selector);
-  const queryAll = (selector, scope = doc) =>
-    Array.from(scope.querySelectorAll(selector));
+(function () {
+  "use strict";
 
-  const cleanups = [];
-  const listen = (target, type, handler, options) => {
-    if (!target || !target.addEventListener) return () => undefined;
-    target.addEventListener(type, handler, options);
-    const cleanup = () => target.removeEventListener(type, handler, options);
-    cleanups.push(cleanup);
-    return cleanup;
+  var win = window;
+  var doc = document;
+
+  var SELECTOR = {
+    heroSection: ".home-hero",
+    heroCanvas: ".home-hero__canvas",
+    heroLine: ".home-hero .clt-eyebrow, .home-hero .clt-page-hero__title, .home-hero .home-hero__presents",
+    heroCue: ".home-hero__cue",
+
+    marqueeRoot: ".home-marquee .clt-marquee",
+    marqueeTrack: ".clt-marquee__track",
+
+    exploreSection: ".clt-home-explore",
+    exploreMask: ".clt-home-explore.is-track-mask",
+    exploreTrack: ".clt-home-explore.is-track",
+    exploreCard: ".clt-home-explore.is-card",
+    exploreCardImage: ".clt-home-explore.is-card-img",
+    exploreCardStatic: ".clt-home-explore.is-card-static",
+    exploreCardOverlay: ".clt-home-explore.is-card-overlay",
+    exploreCardOverlayInner: ".clt-home-explore.is-card-overlay-inner",
+    exploreCardOverlayItem: ".clt-home-explore.is-card-desc, .clt-home-explore.is-card-sep, .clt-home-explore.is-card-meta",
+    cursorLens: ".clt-cursor-lens",
+
+    zoomSection: ".home-zoom",
+    zoomFigure: ".home-zoom__fig",
+
+    reveal: ".home-marquee[data-reveal], .clt-home-explore.is-header[data-reveal], .home-section__head[data-reveal], .clt-panel[data-reveal], .home-past__item[data-reveal], .home-gallery-cta[data-reveal]"
   };
 
-  let mainContext = null;
-  let heroCanvas = null;
-  let heroCanvasContext = null;
-  let resizeObserver = null;
-  let currentFrame = 0;
-  let lenis = null;
-  let lastKnownVelocity = 0;
+  var state = {
+    gsap: null,
+    ScrollTrigger: null,
+    Draggable: null,
+    InertiaPlugin: null,
+    CLT: null,
+    mainContext: null,
+    cleanups: []
+  };
 
-  let heroCanvasCssWidth = 0;
-  let heroCanvasCssHeight = 0;
-  let heroCanvasPixelWidth = 0;
-  let heroCanvasPixelHeight = 0;
-  let heroCanvasResizeQueued = false;
-
-  const frames = new Array(frameCount);
-  const framePromises = new Array(frameCount);
-
-  function normalizedFrame(index) {
-    const rounded = Math.round(index);
-    if (frameStep === 1) return clamp(0, frameCount - 1, rounded);
-    return clamp(
-      0,
-      frameCount - 1,
-      Math.round(rounded / frameStep) * frameStep,
-    );
+  function query(selector, root) {
+    return (root || doc).querySelector(selector);
   }
 
-  function loadFrame(index) {
-    const safeIndex = normalizedFrame(index);
-
-    if (frames[safeIndex]) return Promise.resolve(frames[safeIndex]);
-    if (framePromises[safeIndex]) return framePromises[safeIndex];
-
-    framePromises[safeIndex] = new Promise((resolve) => {
-      const image = new Image();
-      image.decoding = "async";
-      image.onload = () => {
-        frames[safeIndex] = image;
-        resolve(image);
-      };
-      image.onerror = () => resolve(null);
-      image.src = FRAME_URLS[safeIndex];
-    });
-
-    return framePromises[safeIndex];
+  function queryAll(selector, root) {
+    return Array.prototype.slice.call((root || doc).querySelectorAll(selector));
   }
 
-  function closestLoadedFrame(index) {
-    if (frames[index]) return index;
-
-    for (let distance = 1; distance < frameCount; distance += 1) {
-      const before = index - distance;
-      const after = index + distance;
-
-      if (before >= 0 && frames[before]) return before;
-      if (after < frameCount && frames[after]) return after;
-    }
-
-    return -1;
-  }
-
-  function drawFrame(index) {
-    if (!heroCanvas || !heroCanvasContext || !frameCount) return;
-
-    const safeIndex = normalizedFrame(index);
-    currentFrame = safeIndex;
-
-    if (!frames[safeIndex]) {
-      loadFrame(safeIndex).then(() => {
-        if (currentFrame === safeIndex) drawFrame(safeIndex);
-      });
-    }
-
-    const drawableIndex = closestLoadedFrame(safeIndex);
-    if (drawableIndex < 0) return;
-
-    const image = frames[drawableIndex];
-    if (!image || !image.naturalWidth || !image.naturalHeight) return;
-
-    const canvasWidth = heroCanvas.width;
-    const canvasHeight = heroCanvas.height;
-    const scale = Math.max(
-      canvasWidth / image.naturalWidth,
-      canvasHeight / image.naturalHeight,
-    );
-    const width = image.naturalWidth * scale;
-    const height = image.naturalHeight * scale;
-
-    heroCanvasContext.clearRect(0, 0, canvasWidth, canvasHeight);
-    heroCanvasContext.drawImage(
-      image,
-      (canvasWidth - width) / 2,
-      (canvasHeight - height) / 2,
-      width,
-      height,
-    );
-  }
-
-  function getCanvasDpr() {
-    return Math.min(win.devicePixelRatio || 1, isMobileLike ? 1.25 : 2);
-  }
-
-  function resizeHeroCanvasFromCache(width, height) {
-    if (!heroCanvas || !heroCanvasContext) return;
-
-    const cssWidth = Math.max(
-      1,
-      Math.round(width || heroCanvasCssWidth || win.innerWidth || 1),
-    );
-    const cssHeight = Math.max(
-      1,
-      Math.round(
-        height ||
-          heroCanvasCssHeight ||
-          (win.visualViewport && win.visualViewport.height) ||
-          win.innerHeight ||
-          1,
-      ),
-    );
-    const dpr = getCanvasDpr();
-    const pixelWidth = Math.round(cssWidth * dpr);
-    const pixelHeight = Math.round(cssHeight * dpr);
-
-    if (
-      pixelWidth === heroCanvasPixelWidth &&
-      pixelHeight === heroCanvasPixelHeight &&
-      heroCanvas.width === pixelWidth &&
-      heroCanvas.height === pixelHeight
-    ) {
-      return;
-    }
-
-    heroCanvasCssWidth = cssWidth;
-    heroCanvasCssHeight = cssHeight;
-    heroCanvasPixelWidth = pixelWidth;
-    heroCanvasPixelHeight = pixelHeight;
-
-    heroCanvas.width = pixelWidth;
-    heroCanvas.height = pixelHeight;
-
-    drawFrame(currentFrame);
-  }
-
-  function runQueuedHeroCanvasResize() {
-    heroCanvasResizeQueued = false;
-    resizeHeroCanvasFromCache();
-  }
-
-  function queueHeroCanvasResize(width, height) {
-    if (width) heroCanvasCssWidth = width;
-    if (height) heroCanvasCssHeight = height;
-
-    if (heroCanvasResizeQueued) return;
-
-    heroCanvasResizeQueued = true;
-    gsap.ticker.add(runQueuedHeroCanvasResize, true, true);
-  }
-
-  function scheduleIdle(callback) {
-    if ("requestIdleCallback" in win) {
-      win.requestIdleCallback(callback, { timeout: 350 });
-      return;
-    }
-
-    win.setTimeout(callback, 80);
-  }
-
-  function preloadFrames() {
-    if (!frameCount) return;
-
-    loadFrame(0).then(() => drawFrame(0));
-    loadFrame(frameCount - 1);
-
-    const queue = [];
-    for (let index = frameStep; index < frameCount - 1; index += frameStep) {
-      queue.push(index);
-    }
-
-    let cursor = 0;
-    const batchSize = isMobileLike ? 3 : 8;
-
-    const loadBatch = () => {
-      const batch = queue.slice(cursor, cursor + batchSize);
-      cursor += batchSize;
-
-      batch.forEach((index) => {
-        loadFrame(index).then((image) => {
-          if (image && Math.abs(index - currentFrame) <= frameStep) {
-            drawFrame(currentFrame);
-          }
-        });
-      });
-
-      if (cursor < queue.length) scheduleIdle(loadBatch);
+  function listen(target, eventName, handler, options) {
+    if (!target || !target.addEventListener) return function () {};
+    target.addEventListener(eventName, handler, options || false);
+    var cleanup = function () {
+      target.removeEventListener(eventName, handler, options || false);
     };
-
-    scheduleIdle(loadBatch);
+    state.cleanups.push(cleanup);
+    return cleanup;
   }
 
-  function initHeroCanvas() {
-    heroCanvas = query(SELECTOR.heroCanvas);
-    if (!heroCanvas) return;
-
-    heroCanvasContext = heroCanvas.getContext("2d", { alpha: false });
-    if (!heroCanvasContext) return;
-
-    resizeHeroCanvasFromCache(
-      win.innerWidth || 1,
-      (win.visualViewport && win.visualViewport.height) || win.innerHeight || 1,
-    );
-
-    if ("ResizeObserver" in win) {
-      resizeObserver = new ResizeObserver((entries) => {
-        const entry = entries[0];
-        if (!entry) return;
-
-        queueHeroCanvasResize(
-          entry.contentRect.width,
-          entry.contentRect.height,
-        );
-      });
-
-      resizeObserver.observe(heroCanvas);
-      cleanups.push(() => resizeObserver.disconnect());
-    } else {
-      listen(
-        win,
-        "resize",
-        () => {
-          queueHeroCanvasResize(
-            win.innerWidth || 1,
-            (win.visualViewport && win.visualViewport.height) ||
-              win.innerHeight ||
-              1,
-          );
-        },
-        { passive: true },
-      );
+  function addTick(handler) {
+    var CLT = state.CLT;
+    var gsap = state.gsap;
+    if (CLT && typeof CLT._addTick === "function") {
+      CLT._addTick(handler);
+      return;
     }
-
-    preloadFrames();
-  }
-
-  function buildHeroTitleTimeline() {
-    const eyebrow = query(SELECTOR.heroEyebrow);
-    const lines = queryAll(SELECTOR.heroLine);
-    const titleLines = lines.filter(
-      (line) => !line.classList.contains("is-presents"),
-    );
-    const presents = lines.filter((line) =>
-      line.classList.contains("is-presents"),
-    );
-    const cta = query(SELECTOR.heroCta);
-    const targets = [eyebrow, ...titleLines, ...presents, cta].filter(Boolean);
-
-    if (!targets.length) return null;
-
-    gsap.set(targets, {
-      autoAlpha: 0,
-      y: "2rem",
-      filter: "blur(0.75rem)",
-      force3D: true,
+    if (!gsap || !gsap.ticker) return;
+    gsap.ticker.add(handler);
+    state.cleanups.push(function () {
+      gsap.ticker.remove(handler);
     });
-    gsap.set(titleLines, { y: "2.75rem" });
-
-    return gsap
-      .timeline({
-        paused: true,
-        defaults: { ease: "power3.out" },
-      })
-      .to(
-        eyebrow,
-        { autoAlpha: 1, y: 0, filter: "blur(0rem)", duration: 0.24 },
-        0,
-      )
-      .to(
-        titleLines,
-        {
-          autoAlpha: 1,
-          y: 0,
-          filter: "blur(0rem)",
-          duration: 0.5,
-          stagger: 0.06,
-        },
-        0.08,
-      )
-      .to(
-        presents,
-        { autoAlpha: 1, y: 0, filter: "blur(0rem)", duration: 0.28 },
-        0.5,
-      );
   }
 
-  function showReducedHero() {
-    loadFrame(0).then(() => drawFrame(0));
+  function getGSAPGlobal(name) {
+    var gsap = state.gsap || win.gsap;
+    if (win[name]) return win[name];
+    if (gsap && gsap.core && typeof gsap.core.globals === "function") {
+      var globals = gsap.core.globals();
+      if (globals && globals[name]) return globals[name];
+    }
+    return null;
+  }
 
-    const reveal = query(SELECTOR.heroReveal);
-    const cta = query(SELECTOR.heroCta);
-    const curtainStage = query(SELECTOR.curtainStage);
-    const titleTargets = [
-      query(SELECTOR.heroEyebrow),
-      ...queryAll(SELECTOR.heroLine),
-      cta,
+  function activateAvailablePlugins() {
+    var gsap = state.gsap;
+    if (!gsap) return;
+
+    var activate = gsap["register" + "Plugin"];
+    if (typeof activate !== "function") return;
+
+    var plugins = [
+      state.ScrollTrigger,
+      state.Draggable,
+      state.InertiaPlugin
     ].filter(Boolean);
 
-    gsap.set(titleTargets, {
-      autoAlpha: 1,
-      y: 0,
-      clearProps: "transform,filter",
-    });
-
-    if (reveal) reveal.style.pointerEvents = "auto";
-    if (cta) cta.style.pointerEvents = "auto";
-    if (curtainStage) curtainStage.style.display = "none";
-  }
-
-  function initHeroScrub() {
-    const heroPin = query(SELECTOR.heroPin);
-    if (!heroPin) return;
-
-    const reveal = query(SELECTOR.heroReveal);
-    const cta = query(SELECTOR.heroCta);
-    const titleTimeline = buildHeroTitleTimeline();
-
-    ScrollTrigger.create({
-      trigger: heroPin,
-      start: "top top",
-      end: "bottom bottom",
-      scrub: true,
-      invalidateOnRefresh: true,
-      onUpdate(self) {
-        drawFrame(self.progress * (frameCount - 1));
-
-        if (!titleTimeline) return;
-
-        const titleProgress = clamp(
-          0,
-          1,
-          (self.progress - titleRevealStart) /
-            (titleRevealEnd - titleRevealStart),
-        );
-
-        titleTimeline.progress(titleProgress);
-
-        const active = titleProgress >= 0.98;
-        if (reveal) reveal.style.pointerEvents = active ? "auto" : "none";
-        if (cta) cta.style.pointerEvents = active ? "auto" : "none";
-      },
-    });
-  }
-
-  function initCurtain() {
-    const heroPin = query(SELECTOR.heroPin);
-    const stage = query(SELECTOR.curtainStage);
-    const left = query(SELECTOR.curtainLeft);
-    const right = query(SELECTOR.curtainRight);
-    const prompt = query(SELECTOR.curtainPrompt);
-
-    if (!heroPin || !stage || !left || !right) return;
-
-    const foldPositions = [
-      "8%",
-      "19%",
-      "31%",
-      "44%",
-      "57%",
-      "69%",
-      "82%",
-      "92%",
-    ];
-    const foldAnimations = [
-      "curtain-fold-a",
-      "curtain-fold-b",
-      "curtain-fold-c",
-      "curtain-fold-d",
-    ];
-
-    [left, right].forEach((panel, sideIndex) => {
-      if (panel.dataset.foldsReady === "true") return;
-
-      const anchor = query(SELECTOR.curtainPanelTop, panel);
-
-      foldPositions.forEach((position, index) => {
-        const fold = doc.createElement("div");
-        const depth = index % 2 === 0 ? "deep" : "shallow";
-        const animation =
-          foldAnimations[(index + sideIndex) % foldAnimations.length];
-
-        fold.className = `clt-home-curtain is-fold is-${depth}`;
-        fold.style.left = position;
-        fold.style.animation = `${animation} ${6 + index * 0.18}s ${index * 0.16}s ease-in-out infinite alternate`;
-
-        panel.insertBefore(fold, anchor || null);
-      });
-
-      panel.dataset.foldsReady = "true";
-    });
-
-    ScrollTrigger.create({
-      trigger: heroPin,
-      start: "top top",
-      end: "bottom bottom",
-      scrub: true,
-      invalidateOnRefresh: true,
-      onUpdate(self) {
-        const openProgress = clamp(0, 1, self.progress / 0.14);
-        const eased = 1 - Math.pow(1 - openProgress, 3);
-        const travel = eased * 112;
-        const gather = 1 - eased * 0.24;
-        const sway = Math.sin(openProgress * Math.PI) * 3;
-
-        gsap.set(left, {
-          xPercent: -travel,
-          scaleX: gather,
-          skewY: sway,
-          transformOrigin: "100% 50%",
-          force3D: true,
-        });
-
-        gsap.set(right, {
-          xPercent: travel,
-          scaleX: gather,
-          skewY: -sway,
-          transformOrigin: "0% 50%",
-          force3D: true,
-        });
-
-        if (prompt) {
-          gsap.set(prompt, { autoAlpha: clamp(0, 1, 1 - openProgress * 4.5) });
-        }
-
-        stage.style.visibility = openProgress >= 1 ? "hidden" : "visible";
-      },
-    });
-  }
-
-  function initHeroMagnet() {
-    const cta = query(SELECTOR.heroCta);
-    if (!cta || reducedMotion || isTouch) return;
-
-    const moveX = gsap.quickTo(cta, "x", {
-      duration: 0.28,
-      ease: "power3.out",
-    });
-    const moveY = gsap.quickTo(cta, "y", {
-      duration: 0.28,
-      ease: "power3.out",
-    });
-    const rotate = gsap.quickTo(cta, "rotation", {
-      duration: 0.35,
-      ease: "power3.out",
-    });
-
-    let bounds = null;
-    let boundsCall = null;
-
-    const updateBounds = () => {
-      bounds = cta.getBoundingClientRect();
-    };
-
-    listen(cta, "pointerenter", updateBounds, { passive: true });
-
-    listen(
-      cta,
-      "pointermove",
-      (event) => {
-        if (!bounds) updateBounds();
-
-        const x = event.clientX - bounds.left - bounds.width / 2;
-        const y = event.clientY - bounds.top - bounds.height / 2;
-
-        moveX(clamp(-10, 10, x * 0.16));
-        moveY(clamp(-8, 8, y * 0.14));
-        rotate(clamp(-3, 3, x * 0.035));
-      },
-      { passive: true },
-    );
-
-    listen(cta, "pointerleave", () => {
-      bounds = null;
-      moveX(0);
-      moveY(0);
-      rotate(0);
-    });
-
-    listen(
-      win,
-      "resize",
-      () => {
-        bounds = null;
-        if (boundsCall) boundsCall.kill();
-        boundsCall = gsap.delayedCall(0.18, () => {
-          if (doc.pointerLockElement !== cta) return;
-          updateBounds();
-        });
-      },
-      { passive: true },
-    );
-
-    cleanups.push(() => {
-      if (boundsCall) boundsCall.kill();
-    });
-  }
-
-  function getScrollY() {
-    if (lenis && typeof lenis.scroll === "number") return lenis.scroll;
-    return win.scrollY || doc.documentElement.scrollTop || 0;
-  }
-
-  function initLenis() {
-    if (reducedMotion || isMobileLike || !Lenis) return;
-
-    let ownsLenis = false;
-
-    const handleScroll = (event) => {
-      lastKnownVelocity =
-        typeof event.velocity === "number" ? event.velocity : 0;
-
-      if (ScrollTrigger && typeof ScrollTrigger.update === "function") {
-        ScrollTrigger.update();
-      }
-    };
-
-    const existingLenis = win.CLT_HOME_LENIS;
-
-    if (existingLenis && typeof existingLenis.raf === "function") {
-      lenis = existingLenis;
-    } else {
-      lenis = new Lenis({
-        lerp: 0.08,
-        smoothWheel: true,
-        wheelMultiplier: 0.9,
-        touchMultiplier: 1.25,
-        infinite: false,
-        autoRaf: false,
-      });
-
-      ownsLenis = true;
-      win.CLT_HOME_LENIS = lenis;
-      win.lenis = lenis;
-    }
-
-    const updateLenis = (time) => {
-      if (!lenis || typeof lenis.raf !== "function") return;
-      lenis.raf(time * 1000);
-    };
-
-    gsap.ticker.add(updateLenis);
-    gsap.ticker.lagSmoothing(0);
-
-    if (typeof lenis.on === "function") {
-      lenis.on("scroll", handleScroll);
-    }
-
-    cleanups.push(() => {
-      gsap.ticker.remove(updateLenis);
-
-      if (lenis && typeof lenis.off === "function") {
-        lenis.off("scroll", handleScroll);
-      }
-
-      if (ownsLenis && lenis && typeof lenis.destroy === "function") {
-        lenis.destroy();
-      }
-
-      if (ownsLenis && win.CLT_HOME_LENIS === lenis) {
-        win.CLT_HOME_LENIS = null;
-      }
-
-      if (ownsLenis && win.lenis === lenis) {
-        win.lenis = null;
-      }
-
-      lenis = null;
-      lastKnownVelocity = 0;
-    });
-  }
-
-  function initDust() {
-    const far = query(SELECTOR.dustFar);
-    const mid = query(SELECTOR.dustMid);
-    const near = query(SELECTOR.dustNear);
-    const root = query(SELECTOR.dustRoot);
-    const containers = [far, mid, near].filter(Boolean);
-
-    if (!containers.length) return;
-
-    containers.forEach((container) => {
-      queryAll(SELECTOR.dustParticle, container).forEach((particle) =>
-        particle.remove(),
-      );
-    });
-
-    const density = reducedMotion ? 0.35 : isMobileLike ? 0.7 : dustDensity;
-    const tones = ["warm", "warm", "warm", "brass", "brass", "cool"];
-    const stars = [];
-    const spawn = (container, count, minSize, maxSize, depth) => {
-      if (!container) return;
-
-      const fragment = doc.createDocumentFragment();
-      const total = Math.round(count * density);
-
-      for (let index = 0; index < total; index += 1) {
-        const element = doc.createElement("div");
-        const tone = tones[Math.floor(Math.random() * tones.length)];
-        const size = random(minSize, maxSize);
-        const baseX = random(0, 100);
-        const baseY = random(0, 100);
-
-        element.className = `clt-home-dust is-particle is-${tone}`;
-        element.style.width = `${size}px`;
-        element.style.height = `${size}px`;
-        element.style.left = `${baseX}%`;
-        element.style.top = `${baseY}%`;
-        element.style.willChange = "transform, opacity";
-        element.style.setProperty("--twinkle-dur", `${random(2.4, 7.2)}s`);
-        element.style.setProperty("--twinkle-delay", `${random(0, 5.5)}s`);
-        element.style.setProperty(
-          "--twinkle-lo",
-          random(0.15, 0.36).toFixed(2),
-        );
-        element.style.setProperty("--twinkle-hi", random(0.72, 1).toFixed(2));
-
-        fragment.appendChild(element);
-
-        const star = {
-          element,
-          baseY,
-          depth,
-          floatX: 0,
-          floatY: 0,
-          inertiaX: 0,
-          inertiaY: 0,
-          pointerY: 0,
-          setCss: gsap.quickSetter(element, "css"),
-        };
-
-        gsap.to(star, {
-          floatX: random(-18, 18) * depth,
-          floatY: random(-22, 22) * depth,
-          duration: random(18, 42),
-          repeat: -1,
-          yoyo: true,
-          ease: "sine.inOut",
-        });
-
-        stars.push(star);
-      }
-
-      container.appendChild(fragment);
-    };
-
-    spawn(far, 46, 1.0, 2.0, 0.45);
-    spawn(mid, 31, 1.3, 2.8, 0.78);
-    spawn(near, 18, 1.8, 3.6, 1.15);
-
-    cleanups.push(() => {
-      stars.forEach((star) => star.element.remove());
-    });
-
-    if (reducedMotion || !stars.length) return;
-
-    let lastScroll = getScrollY();
-    let scrollImpulse = 0;
-    let pointerImpulseX = 0;
-    let pointerImpulseY = 0;
-    let lastPointerX = 0;
-    let lastPointerY = 0;
-    let hasPointer = false;
-
-    const removePointerMove = isTouch
-      ? () => undefined
-      : listen(
-          win,
-          "pointermove",
-          (event) => {
-            if (!hasPointer) {
-              lastPointerX = event.clientX;
-              lastPointerY = event.clientY;
-              hasPointer = true;
-              return;
-            }
-
-            pointerImpulseX +=
-              clamp(-30, 30, event.clientX - lastPointerX) * 0.22;
-            pointerImpulseY +=
-              clamp(-30, 30, event.clientY - lastPointerY) * 0.16;
-            lastPointerX = event.clientX;
-            lastPointerY = event.clientY;
-          },
-          { passive: true },
-        );
-
-    const ticker = () => {
-      const scroll = getScrollY();
-      const scrollDelta = scroll - lastScroll;
-      const velocity = lenis ? lastKnownVelocity * 1000 : scrollDelta * 60;
-
-      lastScroll = scroll;
-      scrollImpulse += clamp(-90, 90, scrollDelta);
-
-      stars.forEach((star) => {
-        const parallaxY = -scroll * 0.065 * star.depth;
-        const targetInertiaY = -scrollImpulse * 0.085 * star.depth;
-        const targetInertiaX = pointerImpulseX * 0.08 * star.depth;
-        const targetPointerY = pointerImpulseY * 0.035 * star.depth;
-
-        star.inertiaY +=
-          (targetInertiaY + targetPointerY - star.inertiaY) * 0.11;
-        star.inertiaX += (targetInertiaX - star.inertiaX) * 0.09;
-        star.pointerY += (targetPointerY - star.pointerY) * 0.08;
-
-        const stretch = clamp(
-          1,
-          1.72,
-          1 + (Math.abs(velocity) / 4200) * 0.48 * star.depth,
-        );
-        const rotate = clamp(
-          -14,
-          14,
-          (scrollDelta * 0.08 + pointerImpulseX * 0.05) * star.depth,
-        );
-
-        star.setCss({
-          x: star.floatX + star.inertiaX,
-          y: parallaxY + star.floatY + star.inertiaY + star.pointerY,
-          scaleY: stretch,
-          rotation: rotate,
-          force3D: true,
-        });
-      });
-
-      scrollImpulse *= 0.9;
-      pointerImpulseX *= 0.86;
-      pointerImpulseY *= 0.86;
-    };
-
-    gsap.ticker.add(ticker);
-
-    const page = query(SELECTOR.page);
-
-    if (page && root && far) {
-      gsap.to(far, {
-        y: 70,
-        ease: "none",
-        scrollTrigger: {
-          trigger: page,
-          start: "top top",
-          end: "bottom bottom",
-          scrub: 1.3,
-          invalidateOnRefresh: true,
-        },
-      });
-    }
-
-    if (page && root && mid) {
-      gsap.to(mid, {
-        y: -130,
-        ease: "none",
-        scrollTrigger: {
-          trigger: page,
-          start: "top top",
-          end: "bottom bottom",
-          scrub: 1.5,
-          invalidateOnRefresh: true,
-        },
-      });
-    }
-
-    if (page && root && near) {
-      gsap.to(near, {
-        y: -260,
-        ease: "none",
-        scrollTrigger: {
-          trigger: page,
-          start: "top top",
-          end: "bottom bottom",
-          scrub: 1.8,
-          invalidateOnRefresh: true,
-        },
-      });
-    }
-
-    cleanups.push(() => {
-      gsap.ticker.remove(ticker);
-      removePointerMove();
-    });
-  }
-
-  function initMobileViewportLock() {
-    if (!isMobileLike) return;
-
-    const sync = () => {
-      const height = Math.round(
-        (win.visualViewport && win.visualViewport.height) ||
-          win.innerHeight ||
-          1,
-      );
-      const hero = query(SELECTOR.heroSection);
-      const heroPin = query(SELECTOR.heroPin);
-      const pinMultiplier =
-        parseFloat(
-          win
-            .getComputedStyle(hero || doc.documentElement)
-            .getPropertyValue("--pin-multiplier"),
-        ) || 3;
-
-      doc.documentElement.style.setProperty(
-        "--clt-js-vh",
-        `${height * 0.01}px`,
-      );
-
-      if (hero) hero.style.minHeight = `${height}px`;
-      if (heroPin)
-        heroPin.style.minHeight = `${Math.round(height * pinMultiplier)}px`;
-
-      resizeHeroCanvasFromCache(win.innerWidth || 1, height);
-      ScrollTrigger.refresh();
-    };
-
-    sync();
-    listen(win, "orientationchange", () => win.setTimeout(sync, 160), {
-      passive: true,
-    });
-
-    if (win.visualViewport) {
-      listen(win.visualViewport, "resize", () => win.setTimeout(sync, 120), {
-        passive: true,
-      });
+    if (plugins.length) {
+      activate.apply(gsap, plugins);
     }
   }
 
-  function initHeroPinGuard() {
-    const hero = query(SELECTOR.heroSection);
-    const heroPin = query(SELECTOR.heroPin);
-    if (!hero || !heroPin) return;
-
-    const pinMultiplier =
-      parseFloat(
-        win
-          .getComputedStyle(doc.documentElement)
-          .getPropertyValue("--pin-multiplier"),
-      ) || 5;
-    const viewportHeight = Math.max(
-      1,
-      win.innerHeight || doc.documentElement.clientHeight || 1,
-    );
-    const minimumPinHeight = Math.round(viewportHeight * pinMultiplier);
-
-    // Sticky pinning will fail if a parent clips/scrolls the sticky context.
-    // Your uploaded HTML had an earlier .clt-page overflow rule, so this keeps
-    // the page wrapper from blocking the hero's sticky behavior.
-    const page = query(SELECTOR.page);
-    if (page) {
-      const pageStyles = win.getComputedStyle(page);
-      const overflowY = pageStyles.overflowY;
-      const overflow = pageStyles.overflow;
-
-      if (
-        overflowY === "clip" ||
-        overflowY === "hidden" ||
-        overflow === "clip" ||
-        overflow === "hidden"
-      ) {
-        page.style.overflow = "visible";
-      }
+  function getScrollPosition() {
+    var CLT = state.CLT;
+    if (CLT && CLT.lenis && typeof CLT.lenis.scroll === "number") {
+      return CLT.lenis.scroll;
     }
-
-    heroPin.style.overflow = "visible";
-    heroPin.style.minHeight = `${minimumPinHeight}px`;
-
-    hero.style.position = "sticky";
-    hero.style.top = "0";
-    hero.style.minHeight = "calc(var(--clt-js-vh, 1vh) * 100)";
-    hero.style.overflow = "hidden";
-  }
-
-  function initMarquee() {
-    const track = query(SELECTOR.marqueeTrack);
-    const section =
-      query(SELECTOR.marqueeSection) ||
-      (track && track.closest(SELECTOR.marqueeSection));
-    if (!track || !section) return;
-
-    if (track.dataset.marqueeReady !== "true") {
-      const sets = queryAll(SELECTOR.marqueeSet, track);
-
-      if (sets.length === 1) {
-        const clone = sets[0].cloneNode(true);
-        clone.setAttribute("aria-hidden", "true");
-        track.appendChild(clone);
-      }
-
-      track.dataset.marqueeReady = "true";
-    }
-
-    const firstSet = query(SELECTOR.marqueeSet, track);
-    if (!firstSet) return;
-
-    track.style.animation = "none";
-
-    let setWidth = 1;
-    let direction = 1;
-    let isHovering = false;
-
-    let marqueeSizeDirty = true;
-    let marqueeResizeCall = null;
-
-    const updateWidth = () => {
-      if (!marqueeSizeDirty) return;
-
-      marqueeSizeDirty = false;
-      setWidth = Math.max(1, firstSet.scrollWidth || 1);
-    };
-
-    updateWidth();
-
-    if ("ResizeObserver" in win) {
-      const marqueeObserver = new ResizeObserver(() => {
-        marqueeSizeDirty = true;
-
-        if (marqueeResizeCall) marqueeResizeCall.kill();
-        marqueeResizeCall = gsap.delayedCall(0.12, () => {
-          updateWidth();
-          marqueeTween.invalidate();
-        });
-      });
-
-      marqueeObserver.observe(firstSet);
-      cleanups.push(() => marqueeObserver.disconnect());
-    }
-
-    const marqueeTween = gsap.to(track, {
-      x: () => -setWidth,
-      duration: () => setWidth / (isMobileLike ? 45 : 70),
-      ease: "none",
-      repeat: -1,
-      modifiers: {
-        x: (value) => `${parseFloat(value) % -setWidth}px`,
-      },
-    });
-
-    const updateSpeed = (speed = 1) => {
-      gsap.to(marqueeTween, {
-        timeScale: direction * (isHovering ? 0.28 : speed),
-        duration: 0.45,
-        overwrite: true,
-      });
-    };
-
-    listen(section, "mouseenter", () => {
-      isHovering = true;
-      updateSpeed(1);
-    });
-
-    listen(section, "mouseleave", () => {
-      isHovering = false;
-      updateSpeed(1);
-    });
-
-    listen(
-      win,
-      "resize",
-      () => {
-        marqueeSizeDirty = true;
-
-        if (marqueeResizeCall) marqueeResizeCall.kill();
-        marqueeResizeCall = gsap.delayedCall(0.18, () => {
-          updateWidth();
-          marqueeTween.invalidate();
-        });
-      },
-      { passive: true },
-    );
-
-    cleanups.push(() => {
-      if (marqueeResizeCall) marqueeResizeCall.kill();
-    });
-
-    ScrollTrigger.create({
-      trigger: section,
-      start: "top bottom",
-      end: "bottom top",
-      onUpdate(self) {
-        direction = self.direction || 1;
-        const velocityBoost = clamp(1, 4, Math.abs(self.getVelocity()) / 2200);
-        updateSpeed(velocityBoost);
-      },
-    });
+    return win.pageYOffset || doc.documentElement.scrollTop || 0;
   }
 
   function wrapNegativeX(x, width) {
@@ -1352,20 +373,324 @@
     return ((x % -width) + -width) % -width;
   }
 
+  function initHeroScrub() {
+    var gsap = state.gsap;
+    var ScrollTrigger = state.ScrollTrigger;
+    var clamp = gsap.utils.clamp;
+    var section = query(SELECTOR.heroSection);
+    var canvas = query(SELECTOR.heroCanvas, section);
+    var urls = win.CLT_HERO_FRAMES || [];
+
+    if (!section || !canvas || !urls.length || !ScrollTrigger) return;
+
+    var context = canvas.getContext("2d", { alpha: false });
+    if (!context) return;
+
+    var reduced = win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var isMobileLike = win.matchMedia("(max-width: 760px), (pointer: coarse)").matches;
+    var step = isMobileLike ? 3 : 1;
+    var total = urls.length;
+    var frames = new Array(total);
+    var currentFrame = 0;
+    var cssWidth = 0;
+    var cssHeight = 0;
+
+    function normalizeFrame(index) {
+      var rounded = Math.round(index);
+      if (step !== 1) rounded = Math.round(rounded / step) * step;
+      return clamp(0, total - 1, rounded);
+    }
+
+    function loadFrame(index) {
+      index = normalizeFrame(index);
+      if (frames[index] !== undefined) return;
+
+      var image = new Image();
+      image.decoding = "async";
+      frames[index] = false;
+
+      image.onload = function () {
+        frames[index] = image;
+        if (currentFrame === index) drawFrame(index);
+      };
+
+      image.onerror = function () {
+        frames[index] = null;
+      };
+
+      image.src = urls[index];
+    }
+
+    function nearestLoadedFrame(index) {
+      if (frames[index]) return frames[index];
+
+      for (var distance = 1; distance < total; distance += 1) {
+        if (frames[index - distance]) return frames[index - distance];
+        if (frames[index + distance]) return frames[index + distance];
+      }
+
+      return null;
+    }
+
+    function drawFrame(index) {
+      index = normalizeFrame(index);
+      currentFrame = index;
+
+      if (frames[index] === undefined) loadFrame(index);
+
+      var image = frames[index] || nearestLoadedFrame(index);
+      if (!image || !image.naturalWidth) return;
+
+      var canvasWidth = canvas.width;
+      var canvasHeight = canvas.height;
+      var scale = Math.max(canvasWidth / image.naturalWidth, canvasHeight / image.naturalHeight);
+      var imageWidth = image.naturalWidth * scale;
+      var imageHeight = image.naturalHeight * scale;
+
+      context.clearRect(0, 0, canvasWidth, canvasHeight);
+      context.drawImage(
+        image,
+        (canvasWidth - imageWidth) / 2,
+        (canvasHeight - imageHeight) / 2,
+        imageWidth,
+        imageHeight
+      );
+    }
+
+    function resizeCanvas() {
+      var rect = canvas.getBoundingClientRect();
+      var nextWidth = Math.max(1, Math.round(rect.width || win.innerWidth));
+      var nextHeight = Math.max(1, Math.round(rect.height || win.innerHeight));
+
+      if (nextWidth === cssWidth && nextHeight === cssHeight) return;
+
+      cssWidth = nextWidth;
+      cssHeight = nextHeight;
+
+      var dpr = Math.min(win.devicePixelRatio || 1, isMobileLike ? 1.25 : 2);
+      canvas.width = Math.round(nextWidth * dpr);
+      canvas.height = Math.round(nextHeight * dpr);
+
+      drawFrame(currentFrame);
+    }
+
+    resizeCanvas();
+
+    if ("ResizeObserver" in win) {
+      var observer = new ResizeObserver(resizeCanvas);
+      observer.observe(canvas);
+      state.cleanups.push(function () {
+        observer.disconnect();
+      });
+    } else {
+      listen(win, "resize", resizeCanvas, { passive: true });
+    }
+
+    loadFrame(0);
+    loadFrame(total - 1);
+
+    var idle = win.requestIdleCallback || function (callback) {
+      return win.setTimeout(callback, 80);
+    };
+
+    var preloadQueue = [];
+    var preloadIndex = 0;
+    var batchSize = isMobileLike ? 4 : 10;
+
+    for (var frameIndex = step; frameIndex < total - 1; frameIndex += step) {
+      preloadQueue.push(frameIndex);
+    }
+
+    function fillPreloadQueue() {
+      preloadQueue.slice(preloadIndex, preloadIndex + batchSize).forEach(loadFrame);
+      preloadIndex += batchSize;
+
+      if (preloadIndex < preloadQueue.length) {
+        idle(fillPreloadQueue, { timeout: 350 });
+      }
+    }
+
+    fillPreloadQueue();
+
+    var lines = queryAll(SELECTOR.heroLine, section);
+    var cue = query(SELECTOR.heroCue, section);
+
+    if (reduced) {
+      drawFrame(0);
+      gsap.set(lines, { autoAlpha: 1, y: 0 });
+      if (cue) gsap.set(cue, { autoAlpha: 0 });
+      return;
+    }
+
+    gsap.set(lines, { autoAlpha: 0, y: "2rem" });
+
+    var revealTimeline = gsap.timeline({ paused: true, defaults: { ease: "power3.out" } });
+    revealTimeline.to(lines, { autoAlpha: 1, y: 0, duration: 0.5, stagger: 0.12 }, 0);
+
+    var revealStart = 0.62;
+    var revealEnd = 0.96;
+
+    ScrollTrigger.create({
+      trigger: section,
+      start: "top top",
+      end: "bottom bottom",
+      scrub: true,
+      invalidateOnRefresh: true,
+      onUpdate: function (self) {
+        drawFrame(self.progress * (total - 1));
+
+        var titleProgress = clamp(0, 1, (self.progress - revealStart) / (revealEnd - revealStart));
+        revealTimeline.progress(titleProgress);
+
+        if (cue) {
+          gsap.set(cue, {
+            autoAlpha: clamp(0, 1, 1 - self.progress * 6)
+          });
+        }
+      }
+    });
+  }
+
+  function initAcclaimMarquee() {
+    var gsap = state.gsap;
+    var ScrollTrigger = state.ScrollTrigger;
+    var clamp = gsap.utils.clamp;
+    var roots = queryAll(SELECTOR.marqueeRoot);
+
+    if (!roots.length) return;
+
+    var reduced = win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    roots.forEach(function (root) {
+      var tracks = queryAll(SELECTOR.marqueeTrack, root);
+      if (!tracks.length) return;
+
+      if (tracks.length === 1) {
+        var clone = tracks[0].cloneNode(true);
+        clone.setAttribute("aria-hidden", "true");
+        root.appendChild(clone);
+        tracks = queryAll(SELECTOR.marqueeTrack, root);
+      }
+
+      var firstTrack = tracks[0];
+      var loopWidth = 1;
+      var x = 0;
+      var baseSpeed = 34;
+      var direction = -1;
+      var targetDirection = -1;
+      var boost = 0;
+      var targetBoost = 0;
+      var active = true;
+      var paused = false;
+      var lastScroll = getScrollPosition();
+
+      gsap.set(tracks, {
+        x: 0,
+        willChange: "transform",
+        force3D: true
+      });
+
+      function measure() {
+        loopWidth = Math.max(
+          1,
+          firstTrack.getBoundingClientRect().width || firstTrack.scrollWidth || 1
+        );
+
+        x = wrapNegativeX(x, loopWidth);
+        gsap.set(tracks, { x: x });
+      }
+
+      function setActive(value) {
+        active = value;
+        lastScroll = getScrollPosition();
+      }
+
+      measure();
+
+      if (ScrollTrigger) {
+        ScrollTrigger.create({
+          trigger: root,
+          start: "top bottom",
+          end: "bottom top",
+          onEnter: function () { setActive(true); },
+          onEnterBack: function () { setActive(true); },
+          onLeave: function () { setActive(false); },
+          onLeaveBack: function () { setActive(false); }
+        });
+
+        ScrollTrigger.addEventListener("refreshInit", measure);
+        state.cleanups.push(function () {
+          ScrollTrigger.removeEventListener("refreshInit", measure);
+        });
+      }
+
+      listen(win, "resize", function () {
+        gsap.delayedCall(0.18, measure);
+      }, { passive: true });
+
+      listen(root, "pointerenter", function () {
+        paused = true;
+      }, { passive: true });
+
+      listen(root, "pointerleave", function () {
+        paused = false;
+        lastScroll = getScrollPosition();
+      }, { passive: true });
+
+      if (reduced) {
+        gsap.set(tracks, { x: 0, clearProps: "willChange" });
+        return;
+      }
+
+      addTick(function (_time, deltaMilliseconds) {
+        if (!active || paused) return;
+
+        var deltaSeconds = Math.min(0.05, Math.max(0.001, (deltaMilliseconds || 16.7) / 1000));
+        var scroll = getScrollPosition();
+        var scrollDelta = scroll - lastScroll;
+        lastScroll = scroll;
+
+        if (Math.abs(scrollDelta) > 0.08) {
+          targetDirection = scrollDelta > 0 ? -1 : 1;
+          targetBoost = clamp(0, 220, Math.abs(scrollDelta / deltaSeconds) * 0.12);
+        } else {
+          targetBoost = 0;
+        }
+
+        direction += (targetDirection - direction) * 0.08;
+        boost += (targetBoost - boost) * 0.12;
+
+        var speed = baseSpeed + boost;
+        x = wrapNegativeX(x + direction * speed * deltaSeconds, loopWidth);
+
+        gsap.set(tracks, { x: x });
+      });
+    });
+  }
+
   function initExploreCarousel() {
-    const section = query(SELECTOR.exploreSection);
-    const mask = query(SELECTOR.exploreMask);
-    const track = query(SELECTOR.exploreTrack);
+    var gsap = state.gsap;
+    var ScrollTrigger = state.ScrollTrigger;
+    var Draggable = state.Draggable;
+    var clamp = gsap.utils.clamp;
+    var section = query(SELECTOR.exploreSection);
+    var mask = query(SELECTOR.exploreMask, section);
+    var track = query(SELECTOR.exploreTrack, section);
+
     if (!section || !mask || !track) return;
 
-    const originalCards = queryAll(SELECTOR.exploreCard, track).filter(
-      (card) => card.dataset.clone !== "true",
-    );
-    if (!originalCards.length) return;
+    var reduced = win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var isTouch = win.matchMedia("(hover: none), (pointer: coarse)").matches;
+
+    var originals = queryAll(SELECTOR.exploreCard, track).filter(function (card) {
+      return card.dataset.clone !== "true";
+    });
+
+    if (!originals.length) return;
 
     if (track.dataset.clonesReady !== "true") {
-      originalCards.forEach((card) => {
-        const clone = card.cloneNode(true);
+      originals.forEach(function (card) {
+        var clone = card.cloneNode(true);
         clone.dataset.clone = "true";
         clone.setAttribute("aria-hidden", "true");
         track.appendChild(clone);
@@ -1374,218 +699,241 @@
       track.dataset.clonesReady = "true";
     }
 
-    const allCards = queryAll(SELECTOR.exploreCard, track);
+    var allCards = queryAll(SELECTOR.exploreCard, track);
+    var setWidth = 1;
+    var momentumTween = null;
+    var dragging = false;
+    var draggable = null;
+    var velocity = 0;
 
-    let setWidth = 1;
-    let carouselSizeDirty = true;
-    let carouselResizeCall = null;
-    let carouselIsDragging = false;
-
-    const updateSetWidth = () => {
-      if (!carouselSizeDirty) return;
-
-      carouselSizeDirty = false;
+    function measure() {
       setWidth = Math.max(1, track.scrollWidth / 2);
+      setTrackX(Number(gsap.getProperty(track, "x")) || 0);
+    }
 
-      const currentX = Number(gsap.getProperty(track, "x")) || 0;
-      gsap.set(track, { x: wrapNegativeX(currentX, setWidth) });
-    };
+    function setTrackX(value) {
+      gsap.set(track, {
+        x: wrapNegativeX(value, setWidth)
+      });
+    }
 
-    updateSetWidth();
+    function isDragging() {
+      return dragging || Boolean(draggable && draggable.isDragging);
+    }
 
-    listen(
-      win,
-      "resize",
-      () => {
-        carouselSizeDirty = true;
-
-        if (carouselResizeCall) carouselResizeCall.kill();
-        carouselResizeCall = gsap.delayedCall(0.18, updateSetWidth);
-      },
-      { passive: true },
-    );
-
-    gsap.fromTo(
-      section,
-      {
-        autoAlpha: 0,
-        y: "3rem",
-      },
-      {
-        autoAlpha: 1,
-        y: 0,
-        duration: 0.8,
-        ease: "power3.out",
-        scrollTrigger: {
-          trigger: section,
-          start: "top 90%",
-          toggleActions: "play none none reverse",
-        },
-      },
-    );
-
-    let draggable = null;
-    let momentumTween = null;
-    let lastDragX = 0;
-    let lastDragTime = 0;
-    let dragVelocity = 0;
-    let previousScroll = getScrollY();
-    const setTrackX = (x) => gsap.set(track, { x: wrapNegativeX(x, setWidth) });
-    const isDragging = () =>
-      carouselIsDragging || Boolean(draggable && draggable.isDragging);
-
-    const releaseMomentum = () => {
-      const startX = Number(gsap.getProperty(track, "x")) || 0;
-      const distance = dragVelocity * 0.34;
-      const proxy = { progress: 0 };
-      const duration = clamp(0.35, 1.8, Math.abs(dragVelocity) / 760);
+    function releaseMomentum() {
+      var startX = Number(gsap.getProperty(track, "x")) || 0;
+      var distance = velocity * 0.34;
+      var duration = clamp(0.35, 1.8, Math.abs(velocity) / 760);
+      var proxy = { progress: 0 };
 
       if (momentumTween) momentumTween.kill();
 
       momentumTween = gsap.to(proxy, {
         progress: 1,
-        duration,
+        duration: duration,
         ease: "power3.out",
-        onUpdate() {
+        onUpdate: function () {
           setTrackX(startX + distance * proxy.progress);
         },
-        onComplete() {
-          if (draggable) draggable.update();
-        },
+        onComplete: function () {
+          if (draggable && typeof draggable.update === "function") {
+            draggable.update();
+          }
+        }
       });
-    };
+    }
 
-    initExploreCardHovers(allCards, isDragging);
+    measure();
 
-    if (Draggable) {
+    if (ScrollTrigger) {
+      ScrollTrigger.addEventListener("refreshInit", measure);
+      state.cleanups.push(function () {
+        ScrollTrigger.removeEventListener("refreshInit", measure);
+      });
+    }
+
+    listen(win, "resize", function () {
+      gsap.delayedCall(0.18, measure);
+    }, { passive: true });
+
+    gsap.fromTo(section, {
+      autoAlpha: 0,
+      y: "3rem"
+    }, {
+      autoAlpha: 1,
+      y: 0,
+      duration: 0.8,
+      ease: "power3.out",
+      scrollTrigger: ScrollTrigger ? {
+        trigger: section,
+        start: "top 90%",
+        toggleActions: "play none none reverse"
+      } : null
+    });
+
+    initExploreCardHovers(allCards, isDragging, reduced, isTouch);
+    var lens = initExploreLens(mask, clamp, isDragging, reduced, isTouch);
+
+    if (Draggable && !isTouch) {
       draggable = Draggable.create(track, {
         type: "x",
         trigger: mask,
+        inertia: false,
         allowContextMenu: true,
         dragClickables: true,
-        onPress() {
-          carouselIsDragging = true;
-          mask.classList.add("clt-state-dragging");
-
-          if (carouselSizeDirty) updateSetWidth();
+        onPress: function () {
+          dragging = true;
           if (momentumTween) momentumTween.kill();
 
-          lastDragX = this.x;
-          lastDragTime = performance.now();
-          dragVelocity = 0;
+          this._cltLastX = this.x;
+          this._cltLastTime = performance.now();
+          velocity = 0;
 
-          gsap.to(mask, {
-            rotation: -1.15,
-            duration: 0.22,
-            ease: "power2.out",
-            overwrite: true,
-            force3D: true,
-          });
+          if (lens) lens.classList.add("is-dragging");
         },
-        onDrag() {
-          const now = performance.now();
-          const deltaX = this.x - lastDragX;
-          const deltaTime = Math.max(16, now - lastDragTime);
+        onDrag: function () {
+          var now = performance.now();
+          var deltaX = this.x - this._cltLastX;
+          var deltaTime = Math.max(16, now - this._cltLastTime);
 
-          dragVelocity = (deltaX / deltaTime) * 1000;
-          lastDragX = this.x;
-          lastDragTime = now;
+          velocity = (deltaX / deltaTime) * 1000;
+          this._cltLastX = this.x;
+          this._cltLastTime = now;
 
-          const wrapped = wrapNegativeX(this.x, setWidth);
+          var wrapped = wrapNegativeX(this.x, setWidth);
           if (Math.abs(wrapped - this.x) > 0.1) {
             gsap.set(track, { x: wrapped });
+            this.x = wrapped;
             this.update();
-            lastDragX = wrapped;
+            this._cltLastX = wrapped;
           }
         },
-        onRelease() {
-          carouselIsDragging = false;
-          mask.classList.remove("clt-state-dragging");
-
-          gsap.to(mask, {
-            rotation: 0,
-            duration: 0.52,
-            ease: "elastic.out(1, 0.55)",
-            overwrite: true,
-            force3D: true,
-          });
+        onRelease: function () {
+          dragging = false;
+          if (lens) lens.classList.remove("is-dragging");
         },
-        onDragEnd: releaseMomentum,
+        onDragEnd: releaseMomentum
       })[0];
+    } else if (!isTouch) {
+      initPointerDragFallback(mask, track, lens, setTrackX, isDragging, function (nextVelocity) {
+        velocity = nextVelocity;
+      }, releaseMomentum);
     }
 
-    const drift = () => {
-      const scroll = getScrollY();
-      const scrollDelta = scroll - previousScroll;
+    var previousScroll = getScrollPosition();
+
+    addTick(function () {
+      var scroll = getScrollPosition();
+      var delta = scroll - previousScroll;
       previousScroll = scroll;
 
-      const isDraggingNow = isDragging();
-      const hasMomentum = momentumTween && momentumTween.isActive();
+      if (isDragging() || (momentumTween && momentumTween.isActive())) return;
 
-      if (isDraggingNow || hasMomentum) return;
+      var currentX = Number(gsap.getProperty(track, "x")) || 0;
+      var push = clamp(-18, 18, delta * 0.55);
 
-      const currentX = Number(gsap.getProperty(track, "x")) || 0;
-      const scrollPush = clamp(-18, 18, scrollDelta * 0.55);
-
-      if (scrollPush !== 0) {
-        setTrackX(currentX - scrollPush);
-        if (draggable) draggable.update();
+      if (push !== 0) {
+        setTrackX(currentX - push);
+        if (draggable && typeof draggable.update === "function") {
+          draggable.update();
+        }
       }
-    };
-
-    gsap.ticker.add(drift);
-
-    cleanups.push(() => {
-      gsap.ticker.remove(drift);
-      if (carouselResizeCall) carouselResizeCall.kill();
-      if (momentumTween) momentumTween.kill();
-      if (draggable) draggable.kill();
-      gsap.set(track, { clearProps: "transform" });
     });
-
-    initExploreLens(mask, isDragging);
   }
 
-  function initExploreCardHovers(cards, isCarouselDragging) {
+  function initPointerDragFallback(mask, track, lens, setTrackX, isDragging, setVelocity, releaseMomentum) {
+    var gsap = state.gsap;
+    var activePointer = null;
+    var startX = 0;
+    var startTrackX = 0;
+    var lastX = 0;
+    var lastTime = 0;
+
+    listen(mask, "pointerdown", function (event) {
+      if (event.button !== 0 || isDragging()) return;
+
+      activePointer = event.pointerId;
+      startX = event.clientX;
+      startTrackX = Number(gsap.getProperty(track, "x")) || 0;
+      lastX = event.clientX;
+      lastTime = performance.now();
+
+      if (lens) lens.classList.add("is-dragging");
+
+      if (mask.setPointerCapture) {
+        mask.setPointerCapture(activePointer);
+      }
+    });
+
+    listen(mask, "pointermove", function (event) {
+      if (activePointer !== event.pointerId) return;
+
+      var now = performance.now();
+      var deltaX = event.clientX - lastX;
+      var deltaTime = Math.max(16, now - lastTime);
+
+      setVelocity((deltaX / deltaTime) * 1000);
+      setTrackX(startTrackX + event.clientX - startX);
+
+      lastX = event.clientX;
+      lastTime = now;
+    });
+
+    function endDrag(event) {
+      if (activePointer !== event.pointerId) return;
+
+      if (mask.releasePointerCapture) {
+        try {
+          mask.releasePointerCapture(activePointer);
+        } catch (error) {}
+      }
+
+      activePointer = null;
+      if (lens) lens.classList.remove("is-dragging");
+      releaseMomentum();
+    }
+
+    listen(mask, "pointerup", endDrag);
+    listen(mask, "pointercancel", endDrag);
+  }
+
+  function initExploreCardHovers(cards, isDragging, reduced, isTouch) {
+    var gsap = state.gsap;
+
     if (!cards.length || isTouch) return;
 
-    cards.forEach((card) => {
-      const image = query(".clt-home-explore.is-card-img", card);
-      const staticLayer = query(".clt-home-explore.is-card-static", card);
-      const overlay = query(".clt-home-explore.is-card-overlay", card);
-      const overlayInner = query(
-        ".clt-home-explore.is-card-overlay-inner",
-        card,
-      );
-      const overlayItems = queryAll(
-        ".clt-home-explore.is-card-desc, .clt-home-explore.is-card-sep, .clt-home-explore.is-card-meta",
-        card,
-      );
+    cards.forEach(function (card) {
+      var image = query(SELECTOR.exploreCardImage, card);
+      var staticLayer = query(SELECTOR.exploreCardStatic, card);
+      var overlay = query(SELECTOR.exploreCardOverlay, card);
+      var overlayInner = query(SELECTOR.exploreCardOverlayInner, card);
+      var overlayItems = queryAll(SELECTOR.exploreCardOverlayItem, card);
 
       gsap.set(card, {
         scale: 0.95,
         filter: "brightness(0.7) saturate(0.82)",
         transformOrigin: "50% 50%",
-        force3D: true,
+        force3D: true
       });
 
       gsap.set(image, {
         scale: 1.02,
         filter: "saturate(0.98) contrast(1)",
         transformOrigin: "50% 50%",
-        force3D: true,
+        force3D: true
       });
 
       gsap.set(staticLayer, {
         y: 0,
         autoAlpha: 1,
-        force3D: true,
+        force3D: true
       });
 
       gsap.set(overlay, {
         autoAlpha: 0,
         y: 18,
-        force3D: true,
+        force3D: true
       });
 
       gsap.set(overlayInner, {
@@ -1593,124 +941,85 @@
         y: 14,
         scale: 0.965,
         transformOrigin: "50% 100%",
-        force3D: true,
+        force3D: true
       });
 
       gsap.set(overlayItems, {
         autoAlpha: 0,
         y: 8,
-        force3D: true,
+        force3D: true
       });
 
-      const hoverTimeline = gsap.timeline({
+      var timeline = gsap.timeline({
         paused: true,
         defaults: {
           ease: "power3.out",
-          overwrite: "auto",
-        },
+          overwrite: "auto"
+        }
       });
 
-      hoverTimeline
-        .to(
-          card,
-          {
-            scale: 0.985,
-            filter: "brightness(0.86) saturate(0.94)",
-            duration: reducedMotion ? 0.01 : 0.34,
-          },
-          0,
-        )
-        .to(
-          image,
-          {
-            scale: 1.075,
-            filter: "saturate(1.08) contrast(1.04)",
-            duration: reducedMotion ? 0.01 : 0.62,
-            ease: "power2.out",
-          },
-          0,
-        )
-        .to(
-          staticLayer,
-          {
-            y: -6,
-            autoAlpha: 0.92,
-            duration: reducedMotion ? 0.01 : 0.34,
-          },
-          0,
-        )
-        .to(
-          overlay,
-          {
-            autoAlpha: 1,
-            y: 0,
-            duration: reducedMotion ? 0.01 : 0.32,
-          },
-          0.04,
-        )
-        .to(
-          overlayInner,
-          {
-            autoAlpha: 1,
-            y: 0,
-            scale: 1,
-            duration: reducedMotion ? 0.01 : 0.44,
-            ease: "expo.out",
-          },
-          0.06,
-        )
-        .to(
-          overlayItems,
-          {
-            autoAlpha: 1,
-            y: 0,
-            duration: reducedMotion ? 0.01 : 0.32,
-            stagger: 0.035,
-          },
-          0.16,
-        );
+      timeline
+        .to(card, {
+          scale: 0.985,
+          filter: "brightness(0.86) saturate(0.94)",
+          duration: reduced ? 0.01 : 0.34
+        }, 0)
+        .to(image, {
+          scale: 1.075,
+          filter: "saturate(1.08) contrast(1.04)",
+          duration: reduced ? 0.01 : 0.62,
+          ease: "power2.out"
+        }, 0)
+        .to(staticLayer, {
+          y: -6,
+          autoAlpha: 0.92,
+          duration: reduced ? 0.01 : 0.34
+        }, 0)
+        .to(overlay, {
+          autoAlpha: 1,
+          y: 0,
+          duration: reduced ? 0.01 : 0.32
+        }, 0.04)
+        .to(overlayInner, {
+          autoAlpha: 1,
+          y: 0,
+          scale: 1,
+          duration: reduced ? 0.01 : 0.44,
+          ease: "expo.out"
+        }, 0.06)
+        .to(overlayItems, {
+          autoAlpha: 1,
+          y: 0,
+          duration: reduced ? 0.01 : 0.32,
+          stagger: 0.035
+        }, 0.16);
 
-      listen(
-        card,
-        "pointerenter",
-        () => {
-          if (isCarouselDragging && isCarouselDragging()) return;
+      listen(card, "pointerenter", function () {
+        if (isDragging && isDragging()) return;
 
-          card.classList.add("clt-state-hovered");
-          hoverTimeline.timeScale(1).play();
-        },
-        { passive: true },
-      );
+        card.classList.add("clt-state-hovered");
+        timeline.timeScale(1).play();
+      }, { passive: true });
 
-      listen(
-        card,
-        "pointerleave",
-        () => {
-          card.classList.remove("clt-state-hovered");
-          hoverTimeline.timeScale(1.35).reverse();
-        },
-        { passive: true },
-      );
+      listen(card, "pointerleave", function () {
+        card.classList.remove("clt-state-hovered");
+        timeline.timeScale(1.35).reverse();
+      }, { passive: true });
 
-      listen(
-        card,
-        "pointerdown",
-        () => {
-          card.classList.remove("clt-state-hovered");
-          hoverTimeline.timeScale(1.65).reverse();
-        },
-        { passive: true },
-      );
-
-      cleanups.push(() => {
-        hoverTimeline.kill();
-      });
+      listen(card, "pointerdown", function () {
+        card.classList.remove("clt-state-hovered");
+        timeline.timeScale(1.65).reverse();
+      }, { passive: true });
     });
   }
 
-  function initExploreLens(mask, isCarouselDragging) {
-    const lens = query(SELECTOR.exploreLens);
-    if (!lens || !mask || isTouch) return;
+  function initExploreLens(mask, clamp, isDragging, reduced, isTouch) {
+    var gsap = state.gsap;
+    var lens = query(SELECTOR.cursorLens);
+
+    if (!lens || !mask || isTouch) return null;
+
+    mask.classList.add("is-lens-on");
 
     gsap.set(lens, {
       x: 0,
@@ -1720,495 +1029,290 @@
       rotation: 0,
       scale: 0.82,
       autoAlpha: 0,
-      pointerEvents: "none",
-      zIndex: 9999,
-      force3D: true,
+      force3D: true
     });
 
-    const moveX = gsap.quickTo(lens, "x", {
-      duration: 0.16,
-      ease: "power3.out",
-    });
-    const moveY = gsap.quickTo(lens, "y", {
-      duration: 0.16,
-      ease: "power3.out",
-    });
-    const rotate = gsap.quickTo(lens, "rotation", {
-      duration: 0.24,
-      ease: "power3.out",
-    });
-    const scale = gsap.quickTo(lens, "scale", {
-      duration: 0.18,
-      ease: "power3.out",
-    });
+    var moveX = gsap.quickTo(lens, "x", { duration: 0.16, ease: "power3.out" });
+    var moveY = gsap.quickTo(lens, "y", { duration: 0.16, ease: "power3.out" });
+    var rotate = gsap.quickTo(lens, "rotation", { duration: 0.24, ease: "power3.out" });
+    var scaleTo = gsap.quickTo(lens, "scale", { duration: 0.18, ease: "power3.out" });
 
-    let isOver = false;
-    let isDown = false;
-    let lastX = 0;
+    var isOver = false;
+    var isDown = false;
+    var lastX = 0;
 
-    const show = () => {
-      lens.classList.remove("clt-home-is-hidden");
-      lens.classList.add("clt-state-visible");
-
+    function show() {
+      lens.classList.add("is-active");
       gsap.to(lens, {
         autoAlpha: 1,
-        duration: reducedMotion ? 0.01 : 0.16,
+        duration: reduced ? 0.01 : 0.16,
         ease: "power2.out",
-        overwrite: "auto",
+        overwrite: "auto"
       });
 
-      scale(isDown ? 0.86 : 1);
-    };
+      scaleTo(isDown ? 0.86 : 1);
+    }
 
-    const hide = () => {
+    function hide() {
       isOver = false;
       isDown = false;
-
-      lens.classList.remove(
-        "clt-state-visible",
-        "clt-state-dragging",
-        "clt-home-is-hidden",
-      );
+      lens.classList.remove("is-active", "is-dragging");
       rotate(0);
-      scale(0.82);
+      scaleTo(0.82);
 
       gsap.to(lens, {
         autoAlpha: 0,
-        duration: reducedMotion ? 0.01 : 0.18,
+        duration: reduced ? 0.01 : 0.18,
         ease: "power2.out",
-        overwrite: "auto",
+        overwrite: "auto"
       });
-    };
+    }
 
-    const move = (event) => {
-      const deltaX = event.clientX - lastX;
+    function move(event) {
+      var deltaX = event.clientX - lastX;
       lastX = event.clientX;
 
       moveX(event.clientX);
       moveY(event.clientY);
 
-      if (isOver && !(isCarouselDragging && isCarouselDragging())) {
+      if (isOver && !reduced && !(isDragging && isDragging())) {
         rotate(clamp(-10, 10, deltaX * 0.28));
       }
-    };
+    }
 
-    listen(
-      mask,
-      "pointerenter",
-      (event) => {
+    listen(mask, "pointerenter", function (event) {
+      isOver = true;
+      lastX = event.clientX;
+      move(event);
+      show();
+    }, { passive: true });
+
+    listen(mask, "pointermove", function (event) {
+      if (!isOver) {
         isOver = true;
-        lastX = event.clientX;
-        move(event);
         show();
-      },
-      { passive: true },
-    );
+      }
 
-    listen(
-      mask,
-      "pointermove",
-      (event) => {
-        if (!isOver) {
-          isOver = true;
-          show();
-        }
-
-        move(event);
-      },
-      { passive: true },
-    );
+      move(event);
+    }, { passive: true });
 
     listen(mask, "pointerleave", hide, { passive: true });
     listen(win, "blur", hide, { passive: true });
 
-    listen(
-      mask,
-      "pointerdown",
-      (event) => {
-        isDown = true;
-        lens.classList.add("clt-state-dragging");
-        move(event);
-        show();
-        scale(0.86);
-        rotate(0);
-      },
-      { passive: true },
-    );
+    listen(mask, "pointerdown", function (event) {
+      isDown = true;
+      lens.classList.add("is-dragging");
+      move(event);
+      show();
+      scaleTo(0.86);
+      rotate(0);
+    }, { passive: true });
 
-    listen(
-      win,
-      "pointerup",
-      () => {
-        if (!isDown) return;
+    listen(win, "pointerup", function () {
+      if (!isDown) return;
 
-        isDown = false;
-        lens.classList.remove("clt-state-dragging");
+      isDown = false;
+      lens.classList.remove("is-dragging");
 
-        if (isOver) {
-          show();
-        } else {
-          hide();
-        }
-      },
-      { passive: true },
-    );
+      if (isOver) show();
+      else hide();
+    }, { passive: true });
+
+    return lens;
   }
 
-  function initLegalModals() {
-    const termsButton = query(SELECTOR.termsButton);
-    const privacyButton = query(SELECTOR.privacyButton);
-    const termsModal = query(SELECTOR.termsModal);
-    const privacyModal = query(SELECTOR.privacyModal);
-    const modalPairs = [
-      [termsButton, termsModal],
-      [privacyButton, privacyModal],
-    ];
+  function initZoomGallery() {
+    var gsap = state.gsap;
+    var ScrollTrigger = state.ScrollTrigger;
+    var section = query(SELECTOR.zoomSection);
+    var figures = queryAll(SELECTOR.zoomFigure, section);
 
-    let activeModal = null;
-    let activeTimeline = null;
-    let lastFocusedElement = null;
+    if (!section || !figures.length || !ScrollTrigger) return;
 
-    const partsFor = (modal) => {
-      const body = query(SELECTOR.legalBody, modal);
+    var matchMedia = gsap.matchMedia();
 
-      return {
-        panel: query(SELECTOR.legalPanel, modal),
-        backdrop: query(SELECTOR.legalBackdrop, modal),
-        header: query(SELECTOR.legalHeader, modal),
-        title: query(SELECTOR.legalTitle, modal),
-        close: query(SELECTOR.legalClose, modal),
-        body,
-        bodyChildren: body ? Array.from(body.children) : [],
+    matchMedia.add("(min-width: 64rem) and (prefers-reduced-motion: no-preference)", function () {
+      var timeline = gsap.timeline({
+        scrollTrigger: {
+          trigger: section,
+          start: "top top",
+          end: "bottom bottom",
+          scrub: true,
+          invalidateOnRefresh: true
+        }
+      });
+
+      figures.forEach(function (figure) {
+        var targetScale = parseFloat(figure.getAttribute("data-zoom-scale")) || 4;
+
+        gsap.set(figure, {
+          transformOrigin: "center center",
+          willChange: "transform"
+        });
+
+        timeline.fromTo(figure, {
+          scale: 1
+        }, {
+          scale: targetScale,
+          ease: "none"
+        }, 0);
+      });
+
+      return function () {
+        figures.forEach(function (figure) {
+          gsap.set(figure, { clearProps: "scale,willChange" });
+        });
       };
-    };
+    });
 
-    const prepareModal = (modal) => {
-      if (!modal) return;
+    matchMedia.add("(max-width: 63.999rem) and (prefers-reduced-motion: no-preference)", function () {
+      var tweens = [];
 
-      const parts = partsFor(modal);
+      figures.forEach(function (figure, index) {
+        if (index === figures.length - 1) return;
 
-      modal.setAttribute("aria-hidden", "true");
-
-      gsap.set(modal, {
-        autoAlpha: 0,
-        pointerEvents: "none",
-      });
-
-      gsap.set(parts.backdrop, {
-        autoAlpha: 0,
-        scale: 1.035,
-      });
-
-      gsap.set(parts.panel, {
-        autoAlpha: 0,
-        y: reducedMotion ? 0 : 34,
-        scale: reducedMotion ? 1 : 0.94,
-        rotateX: reducedMotion ? 0 : -7,
-        transformOrigin: "50% 45%",
-        filter: reducedMotion ? "none" : "blur(10px)",
-      });
-
-      gsap.set([parts.header, parts.title, parts.close].filter(Boolean), {
-        autoAlpha: 0,
-        y: reducedMotion ? 0 : -10,
-      });
-
-      gsap.set(parts.bodyChildren, {
-        autoAlpha: 0,
-        y: reducedMotion ? 0 : 18,
-        filter: reducedMotion ? "none" : "blur(8px)",
-      });
-    };
-
-    const stopPageScroll = () => {
-      doc.documentElement.classList.add("clt-modal-is-open");
-      doc.body.style.overflow = "hidden";
-
-      if (lenis && typeof lenis.stop === "function") lenis.stop();
-    };
-
-    const startPageScroll = () => {
-      doc.documentElement.classList.remove("clt-modal-is-open");
-      doc.body.style.overflow = "";
-
-      if (lenis && typeof lenis.start === "function") lenis.start();
-    };
-
-    const focusableIn = (modal) => {
-      return queryAll(
-        `${SELECTOR.legalClose}, .clt-button, a[href], button:not([disabled])`,
-        modal,
-      ).filter(
-        (element) =>
-          element.offsetParent !== null ||
-          element === query(SELECTOR.legalClose, modal),
-      );
-    };
-
-    const openModal = (modal) => {
-      if (!modal || modal === activeModal) return;
-
-      if (activeModal) closeModal(activeModal, true);
-
-      const parts = partsFor(modal);
-
-      activeModal = modal;
-      lastFocusedElement = doc.activeElement;
-
-      if (activeTimeline) activeTimeline.kill();
-
-      prepareModal(modal);
-      stopPageScroll();
-
-      modal.classList.add("clt-state-open", "clt-state-animating");
-      modal.setAttribute("aria-hidden", "false");
-
-      activeTimeline = gsap.timeline({
-        defaults: { ease: "power3.out" },
-        onComplete() {
-          modal.classList.remove("clt-state-animating");
-
-          if (parts.panel) {
-            parts.panel.setAttribute("tabindex", "-1");
-            parts.panel.focus({ preventScroll: true });
+        var tween = gsap.to(figure, {
+          scale: 0.9,
+          opacity: 0.5,
+          ease: "none",
+          scrollTrigger: {
+            trigger: figures[index + 1],
+            start: "top bottom",
+            end: "top top",
+            scrub: true,
+            invalidateOnRefresh: true
           }
-        },
+        });
+
+        tweens.push(tween);
       });
 
-      activeTimeline
-        .set(modal, { pointerEvents: "auto" })
-        .to(
-          modal,
-          {
-            autoAlpha: 1,
-            duration: reducedMotion ? 0.01 : 0.18,
-          },
-          0,
-        )
-        .to(
-          parts.backdrop,
-          {
-            autoAlpha: 1,
-            scale: 1,
-            duration: reducedMotion ? 0.01 : 0.42,
-          },
-          0,
-        )
-        .to(
-          parts.panel,
-          {
-            autoAlpha: 1,
-            y: 0,
-            scale: 1,
-            rotateX: 0,
-            filter: "blur(0px)",
-            duration: reducedMotion ? 0.01 : 0.62,
-            ease: "expo.out",
-          },
-          0.06,
-        )
-        .to(
-          [parts.header, parts.title, parts.close].filter(Boolean),
-          {
-            autoAlpha: 1,
-            y: 0,
-            duration: reducedMotion ? 0.01 : 0.36,
-            stagger: 0.035,
-          },
-          0.2,
-        )
-        .to(
-          parts.bodyChildren,
-          {
-            autoAlpha: 1,
-            y: 0,
-            filter: "blur(0px)",
-            duration: reducedMotion ? 0.01 : 0.48,
-            stagger: 0.045,
-          },
-          0.28,
-        );
-    };
+      return function () {
+        tweens.forEach(function (tween) {
+          if (tween.scrollTrigger) tween.scrollTrigger.kill();
+          tween.kill();
+        });
 
-    function closeModal(modal, instant) {
-      if (!modal) return;
+        figures.forEach(function (figure) {
+          gsap.set(figure, { clearProps: "scale,opacity" });
+        });
+      };
+    });
 
-      const parts = partsFor(modal);
+    state.cleanups.push(function () {
+      matchMedia.revert();
+    });
+  }
 
-      if (activeTimeline) activeTimeline.kill();
+  function initReveals() {
+    var gsap = state.gsap;
+    var ScrollTrigger = state.ScrollTrigger;
+    var reduced = win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var elements = queryAll(SELECTOR.reveal);
 
-      modal.classList.add("clt-state-animating");
+    if (!elements.length) return;
 
-      activeTimeline = gsap.timeline({
-        defaults: { ease: "power2.inOut" },
-        onComplete() {
-          modal.classList.remove("clt-state-open", "clt-state-animating");
-          modal.setAttribute("aria-hidden", "true");
-
-          gsap.set(modal, {
-            autoAlpha: 0,
-            pointerEvents: "none",
-          });
-
-          activeModal = null;
-          startPageScroll();
-
-          if (
-            lastFocusedElement &&
-            typeof lastFocusedElement.focus === "function"
-          ) {
-            lastFocusedElement.focus({ preventScroll: true });
-          }
-
-          lastFocusedElement = null;
-        },
-      });
-
-      activeTimeline
-        .to(
-          parts.panel,
-          {
-            autoAlpha: 0,
-            y: instant || reducedMotion ? 0 : 18,
-            scale: instant || reducedMotion ? 1 : 0.965,
-            rotateX: instant || reducedMotion ? 0 : 4,
-            filter: instant || reducedMotion ? "none" : "blur(8px)",
-            duration: instant || reducedMotion ? 0.01 : 0.26,
-          },
-          0,
-        )
-        .to(
-          parts.backdrop,
-          {
-            autoAlpha: 0,
-            scale: instant || reducedMotion ? 1 : 1.02,
-            duration: instant || reducedMotion ? 0.01 : 0.3,
-          },
-          0.04,
-        )
-        .to(
-          modal,
-          {
-            autoAlpha: 0,
-            duration: instant || reducedMotion ? 0.01 : 0.26,
-          },
-          0.08,
-        );
+    if (reduced || !ScrollTrigger) {
+      gsap.set(elements, { opacity: 1, y: 0 });
+      return;
     }
 
-    [termsModal, privacyModal].filter(Boolean).forEach((modal) => {
-      prepareModal(modal);
+    elements.forEach(function (element) {
+      var fade = (element.getAttribute("data-reveal") || "").trim() === "fade";
+      var delay = 0;
+      var group = element.closest("[data-reveal-stagger]");
 
-      queryAll(SELECTOR.legalCloseTrigger, modal).forEach((trigger) => {
-        listen(trigger, "click", () => closeModal(modal));
+      if (group) {
+        var siblings = queryAll(SELECTOR.reveal, group);
+        delay = Math.max(0, siblings.indexOf(element)) * 0.09;
+      }
+
+      gsap.set(element, {
+        opacity: 0,
+        y: fade ? 0 : 34,
+        force3D: true
       });
-    });
 
-    modalPairs.forEach(([button, modal]) => {
-      if (!button || !modal) return;
-      listen(button, "click", () => openModal(modal));
-    });
-
-    listen(win, "keydown", (event) => {
-      if (event.key === "Escape" && activeModal) {
-        closeModal(activeModal);
-        return;
+      function assemble() {
+        gsap.to(element, {
+          opacity: 1,
+          y: 0,
+          duration: 0.85,
+          ease: "back.out(1.3)",
+          delay: delay,
+          overwrite: "auto"
+        });
       }
 
-      if (event.key !== "Tab" || !activeModal) return;
-
-      const focusable = focusableIn(activeModal);
-      if (!focusable.length) return;
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-
-      if (event.shiftKey && doc.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-        return;
+      function strike(down) {
+        gsap.to(element, {
+          opacity: 0,
+          y: fade ? 0 : (down ? -12 : 12),
+          duration: 0.4,
+          ease: "power2.in",
+          overwrite: "auto"
+        });
       }
 
-      if (!event.shiftKey && doc.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
+      ScrollTrigger.create({
+        trigger: element,
+        start: "top 86%",
+        end: "bottom 12%",
+        onEnter: assemble,
+        onEnterBack: assemble,
+        onLeave: function () {
+          strike(true);
+        },
+        onLeaveBack: function () {
+          strike(false);
+        }
+      });
     });
   }
 
   function refreshAfterLayoutSettles() {
-    const refresh = () => {
-      if (!ScrollTrigger || typeof ScrollTrigger.refresh !== "function") return;
+    var ScrollTrigger = state.ScrollTrigger;
+    if (!ScrollTrigger) return;
 
-      win.requestAnimationFrame(() => {
+    function refresh() {
+      win.requestAnimationFrame(function () {
         ScrollTrigger.refresh();
       });
-    };
+    }
 
     listen(win, "load", refresh, { once: true });
 
     if (doc.fonts && doc.fonts.ready) {
-      doc.fonts.ready.then(refresh).catch(() => undefined);
+      doc.fonts.ready.then(refresh).catch(function () {});
     }
 
     win.setTimeout(refresh, 650);
+    win.setTimeout(refresh, 1400);
   }
 
-  function runCleanups() {
-    while (cleanups.length) {
-      const cleanup = cleanups.pop();
+  function init(CLT) {
+    state.CLT = CLT || win.CLT || {};
 
-      try {
-        cleanup();
-      } catch (error) {
-        console.warn("[home-clean.js] Cleanup failed.", error);
-      }
-    }
-  }
-
-  function performFullCleanup() {
-    if (isCleaningUp) return;
-
-    isCleaningUp = true;
-
-    runCleanups();
-
-    if (mainContext) {
-      try {
-        mainContext.revert();
-      } catch (error) {
-        console.warn("[home-clean.js] GSAP context revert failed.", error);
-      }
-
-      mainContext = null;
+    state.gsap = win.gsap;
+    if (!state.gsap) {
+      win.console.warn("[clt-homepage.js] GSAP was not found.");
+      return;
     }
 
-    if (win.CLT_HOME_CLEANUP === performFullCleanup) {
-      win.CLT_HOME_CLEANUP = null;
+    state.ScrollTrigger = getGSAPGlobal("ScrollTrigger");
+    state.Draggable = getGSAPGlobal("Draggable");
+    state.InertiaPlugin = getGSAPGlobal("InertiaPlugin");
+
+    if (!state.ScrollTrigger) {
+      win.console.warn("[clt-homepage.js] ScrollTrigger was not found.");
+      return;
     }
 
-    hasStarted = false;
-    isCleaningUp = false;
-  }
+    activateAvailablePlugins();
 
-  function restoreFromPageCache() {
-    if (lenis && typeof lenis.resize === "function") {
-      lenis.resize();
-    }
-
-    if (ScrollTrigger && typeof ScrollTrigger.refresh === "function") {
-      win.requestAnimationFrame(() => {
-        ScrollTrigger.refresh();
-      });
-    }
-  }
-
-  function init() {
-    if (hasStarted) return;
-
-    hasStarted = true;
-
-    activateGsapPlugins();
+    var gsap = state.gsap;
+    var ScrollTrigger = state.ScrollTrigger;
+    var isMobileLike = win.matchMedia("(max-width: 760px), (pointer: coarse)").matches;
 
     gsap.defaults({ overwrite: "auto" });
 
@@ -2216,68 +1320,51 @@
       ignoreMobileResize: true,
       autoRefreshEvents: isMobileLike
         ? "visibilitychange,DOMContentLoaded,load"
-        : "visibilitychange,DOMContentLoaded,load,resize",
+        : "visibilitychange,DOMContentLoaded,load,resize"
     });
 
-    win.CLT_HOME_CLEANUP = performFullCleanup;
+    state.mainContext = gsap.context(function () {
+      var modules = [
+        { name: "Hero scrub", init: initHeroScrub },
+        { name: "Acclaim marquee", init: initAcclaimMarquee },
+        { name: "Explore carousel", init: initExploreCarousel },
+        { name: "Zoom gallery", init: initZoomGallery },
+        { name: "Reveals", init: initReveals },
+        { name: "Layout refresh", init: refreshAfterLayoutSettles }
+      ];
 
-    const modules = [
-      { name: "Lenis", init: initLenis },
-      { name: "Mobile viewport lock", init: initMobileViewportLock },
-      { name: "Hero pin guard", init: initHeroPinGuard },
-      { name: "Hero canvas", init: initHeroCanvas },
-      { name: "Reduced hero", init: showReducedHero, enabled: reducedMotion },
-      { name: "Hero scrub", init: initHeroScrub, enabled: !reducedMotion },
-      { name: "Curtain", init: initCurtain, enabled: !reducedMotion },
-      { name: "Hero magnet", init: initHeroMagnet, enabled: !reducedMotion },
-      { name: "Dust", init: initDust },
-      { name: "Marquee", init: initMarquee },
-      { name: "Explore carousel", init: initExploreCarousel },
-      { name: "Legal modals", init: initLegalModals },
-      { name: "Layout refresh", init: refreshAfterLayoutSettles },
-    ];
-
-    mainContext = gsap.context(() => {
-      modules.forEach((module) => {
-        if (module.enabled === false) return;
-
+      modules.forEach(function (module) {
         try {
           module.init();
         } catch (error) {
-          console.warn(`[home-clean.js] ${module.name} module failed.`, error);
+          win.console.warn("[clt-homepage.js] " + module.name + " module failed.", error);
         }
       });
     });
 
-    listen(
-      win,
-      "pagehide",
-      (event) => {
-        if (event.persisted) return;
-        performFullCleanup();
-      },
-      { once: true },
-    );
+    listen(win, "pagehide", function () {
+      state.cleanups.forEach(function (cleanup) {
+        cleanup();
+      });
 
-    listen(win, "pageshow", (event) => {
-      if (!event.persisted) return;
-      restoreFromPageCache();
-    });
+      if (state.mainContext) {
+        state.mainContext.revert();
+      }
+    }, { once: true });
   }
 
-  function startWhenReady() {
-    let attempts = 0;
-    const maxAttempts = 90;
+  function start() {
+    var attempts = 0;
+    var maxAttempts = 90;
 
-    const tryStart = () => {
-      gsap = win.gsap;
-      ScrollTrigger = win.ScrollTrigger;
-      Draggable = win.Draggable;
-      Lenis = win.Lenis;
+    function tryStart() {
+      if (win.gsap) {
+        if (win.CLT && typeof win.CLT.ready === "function") {
+          win.CLT.ready(init);
+          return;
+        }
 
-      if (gsap && ScrollTrigger && Draggable) {
-        activateGsapPlugins();
-        init();
+        init(win.CLT || {});
         return;
       }
 
@@ -2288,17 +1375,15 @@
         return;
       }
 
-      console.warn(
-        "[home-clean.js] GSAP, ScrollTrigger, or Draggable were not available before timeout.",
-      );
-    };
+      win.console.warn("[clt-homepage.js] GSAP was not available before timeout.");
+    }
 
     tryStart();
   }
 
   if (doc.readyState === "loading") {
-    doc.addEventListener("DOMContentLoaded", startWhenReady, { once: true });
+    doc.addEventListener("DOMContentLoaded", start, { once: true });
   } else {
-    startWhenReady();
+    start();
   }
 })();
