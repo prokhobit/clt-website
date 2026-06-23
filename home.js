@@ -246,18 +246,6 @@ window.CLT_HERO_FRAMES = [
   "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a54f4eec82dd5e0fca3_frame-0250.avif",
 ];
 
-/* ============================================================================
-   CLT — Webflow homepage interactions
-   Separate-file build for Webflow native GSAP.
-
-   What this file owns:
-   - Hero canvas frame scrub
-   - Acclaim marquee with smooth scroll-direction + scroll-speed response
-   - Explore carousel drag, inertia, hover overlays, and cursor lens
-   - Recent gallery zoom / mobile card stack
-   - Section reveals and ScrollTrigger refresh after layout settles
-   ============================================================================ */
-
 (function () {
   "use strict";
 
@@ -288,6 +276,8 @@ window.CLT_HERO_FRAMES = [
 
     zoomSection: ".home-zoom",
     zoomFigure: ".home-zoom__fig",
+    zoomCaption: ".home-zoom__cap",
+    zoomTitle: ".home-zoom__title",
 
     reveal:
       ".home-marquee[data-reveal], .clt-home-explore.is-header[data-reveal], .home-section__head[data-reveal], .clt-panel[data-reveal], .home-past__item[data-reveal], .home-gallery-cta[data-reveal]",
@@ -751,6 +741,11 @@ window.CLT_HERO_FRAMES = [
         var clone = card.cloneNode(true);
         clone.dataset.clone = "true";
         clone.setAttribute("aria-hidden", "true");
+        // Eager-load cloned imagery so the looped half never flashes blank.
+        var cloneImgs = clone.querySelectorAll("img");
+        for (var ci = 0; ci < cloneImgs.length; ci++) {
+          cloneImgs[ci].setAttribute("loading", "eager");
+        }
         track.appendChild(clone);
       });
 
@@ -996,14 +991,16 @@ window.CLT_HERO_FRAMES = [
       var overlayItems = queryAll(SELECTOR.exploreCardOverlayItem, card);
 
       gsap.set(card, {
-        scale: 0.95,
+        scaleX: 0.95,
+        scaleY: 0.95,
         filter: "brightness(0.7) saturate(0.82)",
         transformOrigin: "50% 50%",
         force3D: true,
       });
 
       gsap.set(image, {
-        scale: 1.02,
+        scaleX: 1.02,
+        scaleY: 1.02,
         filter: "saturate(0.98) contrast(1)",
         transformOrigin: "50% 50%",
         force3D: true,
@@ -1024,7 +1021,8 @@ window.CLT_HERO_FRAMES = [
       gsap.set(overlayInner, {
         autoAlpha: 0,
         y: 14,
-        scale: 0.965,
+        scaleX: 0.965,
+        scaleY: 0.965,
         transformOrigin: "50% 100%",
         force3D: true,
       });
@@ -1047,7 +1045,8 @@ window.CLT_HERO_FRAMES = [
         .to(
           card,
           {
-            scale: 0.985,
+            scaleX: 0.985,
+            scaleY: 0.985,
             filter: "brightness(0.86) saturate(0.94)",
             duration: reduced ? 0.01 : 0.34,
           },
@@ -1056,7 +1055,8 @@ window.CLT_HERO_FRAMES = [
         .to(
           image,
           {
-            scale: 1.075,
+            scaleX: 1.075,
+            scaleY: 1.075,
             filter: "saturate(1.08) contrast(1.04)",
             duration: reduced ? 0.01 : 0.62,
             ease: "power2.out",
@@ -1086,7 +1086,8 @@ window.CLT_HERO_FRAMES = [
           {
             autoAlpha: 1,
             y: 0,
-            scale: 1,
+            scaleX: 1,
+            scaleY: 1,
             duration: reduced ? 0.01 : 0.44,
             ease: "expo.out",
           },
@@ -1151,7 +1152,8 @@ window.CLT_HERO_FRAMES = [
       xPercent: -50,
       yPercent: -50,
       rotation: 0,
-      scale: 0.82,
+      scaleX: 0.82,
+      scaleY: 0.82,
       autoAlpha: 0,
       force3D: true,
     });
@@ -1162,10 +1164,20 @@ window.CLT_HERO_FRAMES = [
       duration: 0.24,
       ease: "power3.out",
     });
-    var scaleTo = gsap.quickTo(lens, "scale", {
+    // Split scale into scaleX/scaleY: quickTo invalidates the prop each call, and the
+    // `scale` shorthand isn't resettable ("scale not eligible for reset" warning).
+    var scaleXTo = gsap.quickTo(lens, "scaleX", {
       duration: 0.18,
       ease: "power3.out",
     });
+    var scaleYTo = gsap.quickTo(lens, "scaleY", {
+      duration: 0.18,
+      ease: "power3.out",
+    });
+    var scaleTo = function (v) {
+      scaleXTo(v);
+      scaleYTo(v);
+    };
 
     var isOver = false;
     var isDown = false;
@@ -1493,8 +1505,6 @@ window.CLT_HERO_FRAMES = [
         { name: "Acclaim marquee", init: initAcclaimMarquee },
         { name: "Explore carousel", init: initExploreCarousel },
         { name: "Zoom gallery", init: initZoomGallery },
-        // Standard [data-reveal] animations are owned by clt-core.js.
-        // Keeping them out of the page script avoids duplicate ScrollTriggers/tweens.
         { name: "Layout refresh", init: refreshAfterLayoutSettles },
       ];
 
