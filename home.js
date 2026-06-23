@@ -1607,9 +1607,7 @@ window.CLT_HERO_FRAMES = [
     var overlay = query(SELECTOR.zoomOverlay, section);
     var overlayItems = queryAll(SELECTOR.zoomOverlayItems, section);
     var centerFigure = query(SELECTOR.zoomCenterFigure, section) || figures[0];
-
-    // Desktop: pinned collage. The center image grows until it owns the viewport;
-    // the supporting stills recede, then the gallery action arrives over the image.
+    
     matchMedia.add(
       "(min-width: 64rem) and (prefers-reduced-motion: no-preference)",
       function () {
@@ -1905,7 +1903,7 @@ window.CLT_HERO_FRAMES = [
           var tween = gsap.to(figure, {
             scaleX: 0.92,
             scaleY: 0.92,
-            opacity: 0.5,
+            opacity: 1.0,
             ease: "none",
             scrollTrigger: {
               trigger: figures[index + 1],
