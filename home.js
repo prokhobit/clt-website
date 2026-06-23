@@ -1,4 +1,3 @@
-
 window.CLT_HERO_FRAMES = [
   "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a35ad19668aae30c2f4_frame-0001.avif",
   "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a35c6cbe27116ca83fd_frame-0002.avif",
@@ -262,6 +261,11 @@ window.CLT_HERO_FRAMES = [
     marqueeRoot: ".home-marquee .clt-marquee",
     marqueeTrack: ".clt-marquee__track",
 
+    pastViewport: ".home-past__viewport",
+    pastTrack: "[data-home-past]",
+    pastItem: ".home-past__item",
+    pastPoster: ".home-past__item .clt-poster",
+
     exploreSection: ".clt-home-explore",
     exploreMask: ".clt-home-explore.is-track-mask",
     exploreTrack: ".clt-home-explore.is-track",
@@ -278,9 +282,13 @@ window.CLT_HERO_FRAMES = [
     zoomFigure: ".home-zoom__fig",
     zoomCaption: ".home-zoom__cap",
     zoomTitle: ".home-zoom__title",
+    zoomCenterFigure: ".home-zoom__fig.is-1",
+    zoomOverlay: ".home-zoom__overlay",
+    zoomOverlayItems:
+      ".home-zoom__overlay .clt-eyebrow, .home-zoom__overlay-title, .home-zoom__overlay-copy, .home-zoom__overlay .clt-button",
 
     reveal:
-      ".home-marquee[data-reveal], .clt-home-explore.is-header[data-reveal], .home-section__head[data-reveal], .clt-panel[data-reveal], .home-past__item[data-reveal], .home-gallery-cta[data-reveal]",
+      ".home-marquee[data-reveal], .clt-home-explore.is-header[data-reveal], .home-section__head[data-reveal], .clt-panel[data-reveal], .home-past__item[data-reveal]",
   };
 
   var state = {
@@ -714,6 +722,305 @@ window.CLT_HERO_FRAMES = [
     });
   }
 
+  function initPosterArchive() {
+    var gsap = state.gsap;
+    var ScrollTrigger = state.ScrollTrigger;
+    var Draggable = state.Draggable;
+    var clamp = gsap.utils.clamp;
+    var viewport = query(SELECTOR.pastViewport);
+    var track = query(SELECTOR.pastTrack, viewport || doc);
+
+    if (!viewport || !track) return;
+
+    var reduced = win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var originals = queryAll(SELECTOR.pastItem, track).filter(function (item) {
+      return item.dataset.clone !== "true";
+    });
+
+    if (originals.length < 2) return;
+
+    if (track.dataset.clonesReady !== "true") {
+      originals.forEach(function (item) {
+        var clone = item.cloneNode(true);
+        clone.dataset.clone = "true";
+        clone.setAttribute("aria-hidden", "true");
+        clone.removeAttribute("data-reveal");
+        clone.removeAttribute("id");
+        track.appendChild(clone);
+      });
+      track.dataset.clonesReady = "true";
+    }
+
+    var items = queryAll(SELECTOR.pastItem, track);
+    var posters = queryAll(SELECTOR.pastPoster, track);
+    var setWidth = 1;
+    var velocity = 0;
+    var dragging = false;
+    var paused = false;
+    var active = true;
+    var momentumTween = null;
+    var draggable = null;
+    var previousScroll = getScrollPosition();
+
+    gsap.set(viewport, {
+      overflow: "hidden",
+      touchAction: "pan-y",
+    });
+
+    gsap.set(track, {
+      x: 0,
+      overflow: "visible",
+      scrollSnapType: "none",
+      willChange: "transform",
+      force3D: true,
+    });
+
+    gsap.set(items, {
+      willChange: "transform, filter",
+      force3D: true,
+    });
+
+    gsap.set(posters, {
+      transformOrigin: "50% 50%",
+      willChange: "transform, filter",
+      force3D: true,
+    });
+
+    function setTrackX(value) {
+      gsap.set(track, { x: wrapNegativeX(value, setWidth) });
+    }
+
+    function measure() {
+      setWidth = Math.max(1, track.scrollWidth / 2);
+      setTrackX(Number(gsap.getProperty(track, "x")) || 0);
+    }
+
+    function isDragging() {
+      return dragging || Boolean(draggable && draggable.isDragging);
+    }
+
+    function setPaused(value) {
+      paused = value;
+      viewport.classList.toggle("is-paused", paused || dragging);
+      previousScroll = getScrollPosition();
+    }
+
+    function releaseMomentum() {
+      var startX = Number(gsap.getProperty(track, "x")) || 0;
+      var distance = velocity * 0.42;
+      var duration = clamp(0.42, 1.65, Math.abs(velocity) / 820);
+      var proxy = { progress: 0 };
+
+      if (momentumTween) momentumTween.kill();
+      if (Math.abs(velocity) < 35) return;
+
+      momentumTween = gsap.to(proxy, {
+        progress: 1,
+        duration: duration,
+        ease: "power3.out",
+        onUpdate: function () {
+          setTrackX(startX + distance * proxy.progress);
+        },
+        onComplete: function () {
+          velocity = 0;
+          if (draggable && typeof draggable.update === "function") {
+            draggable.update();
+          }
+        },
+      });
+    }
+
+    function pressStart() {
+      dragging = true;
+      viewport.classList.add("is-dragging");
+      if (momentumTween) momentumTween.kill();
+    }
+
+    function pressEnd() {
+      dragging = false;
+      viewport.classList.remove("is-dragging");
+      previousScroll = getScrollPosition();
+    }
+
+    measure();
+
+    if (ScrollTrigger) {
+      ScrollTrigger.create({
+        trigger: viewport,
+        start: "top bottom",
+        end: "bottom top",
+        onEnter: function () {
+          active = true;
+          previousScroll = getScrollPosition();
+        },
+        onEnterBack: function () {
+          active = true;
+          previousScroll = getScrollPosition();
+        },
+        onLeave: function () {
+          active = false;
+        },
+        onLeaveBack: function () {
+          active = false;
+        },
+      });
+
+      ScrollTrigger.addEventListener("refreshInit", measure);
+      state.cleanups.push(function () {
+        ScrollTrigger.removeEventListener("refreshInit", measure);
+      });
+    }
+
+    listen(
+      win,
+      "resize",
+      function () {
+        gsap.delayedCall(0.18, measure);
+      },
+      { passive: true },
+    );
+
+    listen(viewport, "pointerenter", function () {
+      setPaused(true);
+    });
+
+    listen(viewport, "pointerleave", function () {
+      setPaused(false);
+    });
+
+    listen(viewport, "focusin", function () {
+      setPaused(true);
+    });
+
+    listen(viewport, "focusout", function () {
+      setPaused(false);
+    });
+
+    if (Draggable) {
+      draggable = Draggable.create(track, {
+        type: "x",
+        trigger: viewport,
+        inertia: false,
+        allowContextMenu: true,
+        allowNativeTouchScrolling: true,
+        dragClickables: true,
+        onPress: function () {
+          pressStart();
+          this._cltLastX = this.x;
+          this._cltLastTime = performance.now();
+          velocity = 0;
+        },
+        onDrag: function () {
+          var now = performance.now();
+          var deltaX = this.x - this._cltLastX;
+          var deltaTime = Math.max(16, now - this._cltLastTime);
+          velocity = (deltaX / deltaTime) * 1000;
+          this._cltLastX = this.x;
+          this._cltLastTime = now;
+
+          var wrapped = wrapNegativeX(this.x, setWidth);
+          if (Math.abs(wrapped - this.x) > 0.1) {
+            gsap.set(track, { x: wrapped });
+            this.x = wrapped;
+            this.update();
+            this._cltLastX = wrapped;
+          }
+        },
+        onRelease: pressEnd,
+        onDragEnd: releaseMomentum,
+      })[0];
+
+      state.cleanups.push(function () {
+        if (draggable && typeof draggable.kill === "function") draggable.kill();
+      });
+    } else {
+      initPointerDragFallback(
+        viewport,
+        track,
+        null,
+        setTrackX,
+        isDragging,
+        function (nextVelocity) {
+          velocity = nextVelocity;
+        },
+        releaseMomentum,
+        pressStart,
+        pressEnd,
+      );
+    }
+
+    items.forEach(function (item) {
+      var poster = query(".clt-poster", item);
+      if (!poster) return;
+
+      var hover = gsap.timeline({
+        paused: true,
+        defaults: { ease: "power3.out", overwrite: "auto" },
+      });
+
+      hover
+        .to(
+          item,
+          {
+            y: -8,
+            filter: "brightness(1.08)",
+            duration: reduced ? 0.01 : 0.34,
+          },
+          0,
+        )
+        .to(
+          poster,
+          {
+            scaleX: 1.045,
+            scaleY: 1.045,
+            filter: "saturate(1.12) contrast(1.05)",
+            duration: reduced ? 0.01 : 0.56,
+            ease: "power2.out",
+          },
+          0,
+        );
+
+      listen(item, "pointerenter", function () {
+        if (isDragging()) return;
+        hover.timeScale(1).play();
+      });
+
+      listen(item, "pointerleave", function () {
+        hover.timeScale(1.35).reverse();
+      });
+    });
+
+    if (reduced) return;
+
+    addTick(function (_time, deltaMilliseconds) {
+      if (
+        !active ||
+        paused ||
+        isDragging() ||
+        (momentumTween && momentumTween.isActive())
+      ) {
+        return;
+      }
+
+      var deltaSeconds = Math.min(
+        0.05,
+        Math.max(0.001, (deltaMilliseconds || 16.7) / 1000),
+      );
+      var scroll = getScrollPosition();
+      var scrollDelta = scroll - previousScroll;
+      previousScroll = scroll;
+
+      var currentX = Number(gsap.getProperty(track, "x")) || 0;
+      var autoStep = -30 * deltaSeconds;
+      var scrollPush = clamp(-22, 22, scrollDelta * -0.24);
+      setTrackX(currentX + autoStep + scrollPush);
+
+      if (draggable && typeof draggable.update === "function") {
+        draggable.update();
+      }
+    });
+  }
+
   function initExploreCarousel() {
     var gsap = state.gsap;
     var ScrollTrigger = state.ScrollTrigger;
@@ -922,6 +1229,8 @@ window.CLT_HERO_FRAMES = [
     isDragging,
     setVelocity,
     releaseMomentum,
+    onPress,
+    onRelease,
   ) {
     var gsap = state.gsap;
     var activePointer = null;
@@ -940,6 +1249,7 @@ window.CLT_HERO_FRAMES = [
       lastTime = performance.now();
 
       if (lens) lens.classList.add("is-dragging");
+      if (typeof onPress === "function") onPress();
 
       if (mask.setPointerCapture) {
         mask.setPointerCapture(activePointer);
@@ -971,6 +1281,7 @@ window.CLT_HERO_FRAMES = [
 
       activePointer = null;
       if (lens) lens.classList.remove("is-dragging");
+      if (typeof onRelease === "function") onRelease();
       releaseMomentum();
     }
 
@@ -1292,60 +1603,308 @@ window.CLT_HERO_FRAMES = [
     if (!section || !figures.length || !ScrollTrigger) return;
 
     var matchMedia = gsap.matchMedia();
+    var title = query(SELECTOR.zoomTitle, section);
+    var overlay = query(SELECTOR.zoomOverlay, section);
+    var overlayItems = queryAll(SELECTOR.zoomOverlayItems, section);
+    var centerFigure = query(SELECTOR.zoomCenterFigure, section) || figures[0];
 
+    // Desktop: pinned collage. The center image grows until it owns the viewport;
+    // the supporting stills recede, then the gallery action arrives over the image.
     matchMedia.add(
       "(min-width: 64rem) and (prefers-reduced-motion: no-preference)",
       function () {
+        var sideFigures = figures.filter(function (figure) {
+          return figure !== centerFigure;
+        });
+
+        function centerTargetScale() {
+          var img = query("img", centerFigure);
+          var rect = img
+            ? img.getBoundingClientRect()
+            : centerFigure.getBoundingClientRect();
+          var width = Math.max(1, rect.width || win.innerWidth);
+          var height = Math.max(1, rect.height || win.innerHeight);
+
+          return (
+            Math.max(win.innerWidth / width, win.innerHeight / height) * 1.055
+          );
+        }
+
         var timeline = gsap.timeline({
           scrollTrigger: {
             trigger: section,
             start: "top top",
             end: "bottom bottom",
-            scrub: true,
+            scrub: 0.78,
             invalidateOnRefresh: true,
           },
         });
 
-        figures.forEach(function (figure) {
-          var targetScale =
-            parseFloat(figure.getAttribute("data-zoom-scale")) || 4;
+        gsap.set(figures, {
+          autoAlpha: 1,
+          willChange: "transform, opacity",
+          force3D: true,
+        });
+        gsap.set(centerFigure, {
+          zIndex: 5,
+          transformOrigin:
+            centerFigure.getAttribute("data-zoom-origin") || "50% 50%",
+        });
+        gsap.set(sideFigures, { zIndex: 6 });
+
+        if (overlay) {
+          gsap.set(overlay, {
+            autoAlpha: 0,
+            y: 26,
+            scaleX: 0.982,
+            scaleY: 0.982,
+            pointerEvents: "none",
+            willChange: "transform, opacity",
+            force3D: true,
+          });
+        }
+
+        if (overlayItems.length) {
+          gsap.set(overlayItems, {
+            autoAlpha: 0,
+            y: 18,
+            willChange: "transform, opacity",
+          });
+        }
+
+        if (title) {
+          gsap.set(title, { willChange: "transform, opacity" });
+          timeline
+            .fromTo(
+              title,
+              { autoAlpha: 0, scaleX: 0.94, scaleY: 0.94, yPercent: 12 },
+              {
+                autoAlpha: 1,
+                scaleX: 1,
+                scaleY: 1,
+                yPercent: 0,
+                ease: "power2.out",
+                duration: 0.18,
+              },
+              0,
+            )
+            .to(
+              title,
+              {
+                autoAlpha: 0,
+                yPercent: -9,
+                ease: "power2.inOut",
+                duration: 0.22,
+              },
+              0.38,
+            );
+        }
+
+        sideFigures.forEach(function (figure, index) {
+          var cap = figure.querySelector(SELECTOR.zoomCaption);
+          var flyPath = [
+            {
+              xPercent: -30,
+              yPercent: -22,
+              z: 520,
+              rotation: -8,
+              rotationX: 5,
+              rotationY: -10,
+              scale: 2.35,
+            },
+            {
+              xPercent: 34,
+              yPercent: -16,
+              z: 620,
+              rotation: 7,
+              rotationX: 4,
+              rotationY: 12,
+              scale: 2.55,
+            },
+            {
+              xPercent: -34,
+              yPercent: 25,
+              z: 580,
+              rotation: 6,
+              rotationX: -7,
+              rotationY: -8,
+              scale: 2.48,
+            },
+            {
+              xPercent: 32,
+              yPercent: 22,
+              z: 690,
+              rotation: -6,
+              rotationX: -5,
+              rotationY: 10,
+              scale: 2.72,
+            },
+          ][index % 4];
 
           gsap.set(figure, {
-            transformOrigin: "center center",
-            willChange: "transform",
+            xPercent: 0,
+            yPercent: 0,
+            z: 0,
+            rotation: 0,
+            rotationX: 0,
+            rotationY: 0,
+            transformOrigin: "50% 50%",
+            transformPerspective: 1000,
+            willChange: "transform, opacity",
+            force3D: true,
           });
 
-          timeline.fromTo(
+          timeline.to(
             figure,
             {
-              scale: 1,
+              autoAlpha: 0,
+              xPercent: flyPath.xPercent,
+              yPercent: flyPath.yPercent,
+              z: flyPath.z,
+              scaleX: flyPath.scale,
+              scaleY: flyPath.scale,
+              rotation: flyPath.rotation,
+              rotationX: flyPath.rotationX,
+              rotationY: flyPath.rotationY,
+              ease: "power3.in",
+              duration: 0.5,
             },
-            {
-              scale: targetScale,
-              ease: "none",
-            },
-            0,
+            0.22 + index * 0.02,
           );
+
+          if (cap) {
+            timeline
+              .fromTo(
+                cap,
+                { autoAlpha: 0, yPercent: 60 },
+                {
+                  autoAlpha: 1,
+                  yPercent: 0,
+                  ease: "power2.out",
+                  duration: 0.2,
+                },
+                0.08,
+              )
+              .to(
+                cap,
+                {
+                  autoAlpha: 0,
+                  yPercent: -18,
+                  ease: "power2.in",
+                  duration: 0.14,
+                },
+                0.23 + index * 0.02,
+              );
+          }
         });
 
+        timeline.fromTo(
+          centerFigure,
+          { scaleX: 1, scaleY: 1 },
+          {
+            scaleX: centerTargetScale,
+            scaleY: centerTargetScale,
+            ease: "none",
+            duration: 0.72,
+          },
+          0.18,
+        );
+
+        var centerCap = centerFigure.querySelector(SELECTOR.zoomCaption);
+        if (centerCap) {
+          timeline
+            .fromTo(
+              centerCap,
+              { autoAlpha: 0, yPercent: 50 },
+              { autoAlpha: 1, yPercent: 0, ease: "power2.out", duration: 0.18 },
+              0.1,
+            )
+            .to(
+              centerCap,
+              { autoAlpha: 0, ease: "power2.inOut", duration: 0.18 },
+              0.48,
+            );
+        }
+
+        if (overlay) {
+          timeline.set(overlay, { pointerEvents: "auto" }, 0.72).to(
+            overlay,
+            {
+              autoAlpha: 1,
+              y: 0,
+              scaleX: 1,
+              scaleY: 1,
+              duration: 0.28,
+              ease: "power3.out",
+            },
+            0.72,
+          );
+        }
+
+        if (overlayItems.length) {
+          timeline.to(
+            overlayItems,
+            {
+              autoAlpha: 1,
+              y: 0,
+              duration: 0.28,
+              stagger: 0.045,
+              ease: "power3.out",
+            },
+            0.78,
+          );
+        }
+
         return function () {
+          if (title)
+            gsap.set(title, { clearProps: "transform,opacity,willChange" });
+          if (overlay) gsap.set(overlay, { clearProps: "all" });
+          if (overlayItems.length)
+            gsap.set(overlayItems, { clearProps: "all" });
           figures.forEach(function (figure) {
-            gsap.set(figure, { clearProps: "scale,willChange" });
+            gsap.set(figure, {
+              clearProps: "transform,opacity,visibility,zIndex,willChange",
+            });
+            var cap = figure.querySelector(SELECTOR.zoomCaption);
+            if (cap) gsap.set(cap, { clearProps: "all" });
           });
         };
       },
     );
 
+    // Mobile: sticky-stacking deck. Each still recedes (scaleX/scaleY + fade) as the
+    // next scrolls over it; captions fade in per photo.
     matchMedia.add(
       "(max-width: 63.999rem) and (prefers-reduced-motion: no-preference)",
       function () {
         var tweens = [];
 
         figures.forEach(function (figure, index) {
+          var cap = figure.querySelector(SELECTOR.zoomCaption);
+          if (cap) {
+            tweens.push(
+              gsap.fromTo(
+                cap,
+                { autoAlpha: 0, yPercent: 30 },
+                {
+                  autoAlpha: 1,
+                  yPercent: 0,
+                  ease: "power2.out",
+                  scrollTrigger: {
+                    trigger: figure,
+                    start: "top 72%",
+                    toggleActions: "play none none reverse",
+                  },
+                },
+              ),
+            );
+          }
+
           if (index === figures.length - 1) return;
 
           var tween = gsap.to(figure, {
-            scale: 0.9,
+            scaleX: 0.92,
+            scaleY: 0.92,
             opacity: 0.5,
             ease: "none",
             scrollTrigger: {
@@ -1367,7 +1926,9 @@ window.CLT_HERO_FRAMES = [
           });
 
           figures.forEach(function (figure) {
-            gsap.set(figure, { clearProps: "scale,opacity" });
+            gsap.set(figure, { clearProps: "scaleX,scaleY,opacity" });
+            var cap = figure.querySelector(SELECTOR.zoomCaption);
+            if (cap) gsap.set(cap, { clearProps: "all" });
           });
         };
       },
@@ -1504,7 +2065,10 @@ window.CLT_HERO_FRAMES = [
         { name: "Hero scrub", init: initHeroScrub },
         { name: "Acclaim marquee", init: initAcclaimMarquee },
         { name: "Explore carousel", init: initExploreCarousel },
+        { name: "Poster archive", init: initPosterArchive },
         { name: "Zoom gallery", init: initZoomGallery },
+        // Standard [data-reveal] animations are owned by clt-core.js.
+        // Keeping them out of the page script avoids duplicate ScrollTriggers/tweens.
         { name: "Layout refresh", init: refreshAfterLayoutSettles },
       ];
 
