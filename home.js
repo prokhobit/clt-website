@@ -1886,7 +1886,7 @@ window.CLT_HERO_FRAMES = [
                 { autoAlpha: 0, yPercent: 30 },
                 {
                   autoAlpha: 1,
-                  yPercent: 0,
+                  yPercent: 0.5,
                   ease: "power2.out",
                   scrollTrigger: {
                     trigger: figure,
@@ -1903,7 +1903,7 @@ window.CLT_HERO_FRAMES = [
           var tween = gsap.to(figure, {
             scaleX: 0.92,
             scaleY: 0.92,
-            opacity: 0,
+            opacity: 1.0,
             ease: "none",
             scrollTrigger: {
               trigger: figures[index + 1],
