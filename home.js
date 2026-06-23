@@ -1903,7 +1903,7 @@ window.CLT_HERO_FRAMES = [
           var tween = gsap.to(figure, {
             scaleX: 0.92,
             scaleY: 0.92,
-            opacity: 1.0,
+            opacity: 0.5,
             ease: "none",
             scrollTrigger: {
               trigger: figures[index + 1],
