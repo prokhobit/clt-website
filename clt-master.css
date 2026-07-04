@@ -5920,6 +5920,189 @@ small { font-weight: 500; }
   [data-clt-house] { --house: 1; }
 }
 
+/* ─── 19.36 · Promenade — pinned horizontal scroll set piece ────────────────
+   <section class="clt-promenade" data-clt-promenade>
+     <div class="clt-promenade__track">
+       <article class="clt-promenade__panel">…</article> × n
+     </div>
+   </section>
+   Desktop fine-pointer: clt-core pins the section and scrubs the track
+   horizontally (--promenade 0→1 drives the brass progress filament).
+   Touch / reduced-motion / no-GSAP: native horizontal scroll with snap. */
+.clt-promenade {
+  --promenade: 0;
+  position: relative;
+  isolation: isolate;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+.clt-promenade::-webkit-scrollbar { display: none; }
+.clt-promenade.is-pinned {
+  overflow: clip;
+  scroll-snap-type: none;
+}
+.clt-promenade__track {
+  display: flex;
+  gap: clamp(1rem, 2.5vw, 2rem);
+  width: max-content;                 /* size to content so core measures overflow */
+  padding-block: clamp(1.5rem, 4vh, 3rem) clamp(2.5rem, 6vh, 4rem);
+  padding-inline: max(1.5rem, 8vw);
+}
+.clt-promenade__panel {
+  flex: 0 0 auto;
+  width: min(70vw, 34rem);
+  scroll-snap-align: center;
+}
+/* progress filament — only shown while pinned (scrub mode) */
+.clt-promenade::after {
+  content: ""; position: absolute; left: 10%; right: 10%; bottom: 1rem;
+  height: 1px; background: var(--line-soft);
+  opacity: 0; pointer-events: none;
+}
+.clt-promenade::before {
+  content: ""; position: absolute; left: 10%; bottom: 1rem; height: 1px;
+  width: calc(80% * var(--promenade));
+  z-index: 1; opacity: 0; pointer-events: none;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--clt-brass-rgb) 60%, transparent), var(--clt-filament));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--clt-candle-rgb) 40%, transparent);
+}
+.clt-promenade.is-pinned::before,
+.clt-promenade.is-pinned::after { opacity: 1; }
+
+/* ─── 19.37 · Show card — date block · billing · actions row ────────────────
+   Canonical version of the Events show card (was page CSS as
+   .clt-events-showcard-*). One row per performance:
+   <article class="clt-showcard">
+     <div class="clt-showcard__date"><span class="clt-showcard__month">Sep</span>
+       <span class="clt-showcard__day">12</span><span class="clt-showcard__weekday">Fri</span></div>
+     <div class="clt-showcard__main"><h3 class="clt-showcard__title">…</h3>
+       <p class="clt-showcard__sub">7:30 pm<span class="dot">·</span>Lyric Stage</p></div>
+     <a class="clt-button is-primary is-small" href="…">Tickets</a>
+   </article> */
+.clt-showcard {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1.4rem;
+  padding: 1rem 1.25rem 1rem 1rem;
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--clt-linen-rgb) 3%, transparent), transparent 60%),
+    color-mix(in srgb, var(--clt-charcoal) 70%, var(--clt-plum) 30%);
+  border: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 rgb(255 244 218 / 0.04), 0 14px 30px rgb(0 0 0 / 0.35);
+  transition: transform var(--dur-base) var(--ease),
+              border-color var(--dur-base) var(--ease),
+              box-shadow var(--dur-slow) var(--ease);
+}
+.clt-showcard + .clt-showcard { margin-top: 0.85rem; }
+.clt-showcard:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--clt-brass-rgb) 55%, transparent);
+  box-shadow: var(--shadow-deep), var(--glow-brass);
+}
+.clt-showcard__date {
+  width: 64px;
+  padding: 0.7rem 0;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--clt-night) 80%, var(--clt-plum) 20%);
+  border: 1px solid var(--line);
+  text-align: center;
+  font-family: var(--font-body);
+}
+.clt-showcard__month {
+  display: block;
+  font-size: 0.62rem; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--clt-brass-200);
+}
+.clt-showcard__day {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.55rem; line-height: 1;
+  color: var(--clt-linen-100);
+  margin: 2px 0 3px;
+}
+.clt-showcard__weekday {
+  display: block;
+  font-size: 0.58rem; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--text-dim);
+}
+.clt-showcard__main { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.clt-showcard__title {
+  font-family: var(--font-display); font-weight: 500;
+  font-size: 1.28rem; line-height: 1.2;
+  color: var(--clt-linen-100);
+  margin: 0;
+}
+.clt-showcard__sub { font-size: 0.92rem; color: var(--text-muted); margin: 0; }
+.clt-showcard__sub .dot { color: var(--clt-brass-300); margin: 0 0.4rem; }
+
+/* ─── 19.38 · Skeleton — brass-shimmer loading vocabulary ───────────────────
+   <div class="clt-skeleton"><span class="clt-skeleton__block"></span>
+     <span class="clt-skeleton__line"></span> …</div> */
+.clt-skeleton { display: grid; gap: 0.7rem; }
+.clt-skeleton__block,
+.clt-skeleton__line {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--clt-linen-rgb) 5%, transparent);
+  box-shadow: inset 0 1px 0 rgb(255 244 218 / 0.04), inset 0 -1px 0 rgb(0 0 0 / 0.3);
+}
+.clt-skeleton__block { height: 9rem; border-radius: var(--r-card); }
+.clt-skeleton__line  { height: 0.8rem; border-radius: var(--r-tag); }
+.clt-skeleton__line:last-child { width: 62%; }
+.clt-skeleton__block::after,
+.clt-skeleton__line::after {
+  content: ""; position: absolute; inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(100deg, transparent 32%,
+    color-mix(in srgb, var(--clt-brass-rgb) 11%, transparent) 50%, transparent 68%);
+  animation: clt-skeleton-sweep 1.9s var(--ease) infinite;
+}
+@keyframes clt-skeleton-sweep { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) {
+  .clt-skeleton__block::after, .clt-skeleton__line::after { animation: none; }
+}
+
+/* ─── 19.39 · Navbar condense (opt-in data-clt-navbar-condense on shell) ────
+   clt-core toggles .is-condensed past 90px scroll: bar tightens, seal shrinks,
+   border warms — the marquee sign settling in for the performance. */
+[data-clt-navbar-condense] .clt-navbar {
+  transition: min-height var(--dur-base) var(--ease-stage),
+              padding var(--dur-base) var(--ease-stage),
+              border-color var(--dur-base) var(--ease),
+              box-shadow var(--dur-slow) var(--ease-stage);
+}
+[data-clt-navbar-condense] .clt-navbar__seal { transition: transform var(--dur-base) var(--ease-stage); }
+.clt-navbar-shell.is-condensed .clt-navbar {
+  min-height: 2.75rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  border-color: color-mix(in srgb, var(--clt-brass-rgb) 34%, var(--line));
+  box-shadow:
+    inset 0 1px 0 rgb(255 244 218 / 0.14),
+    inset 0 -1px 0 rgb(0 0 0 / 0.52),
+    0 18px 40px rgb(0 0 0 / 0.5);
+}
+.clt-navbar-shell.is-condensed .clt-navbar__seal { transform: scale(0.85); }
+
+/* ─── 19.40 · Idle-tab hygiene — clt-core adds html.clt-hidden when the tab is
+   hidden; every infinite ambience pauses (battery + thermal). ─────────────── */
+html.clt-hidden :is(
+  .clt-marquee__track,
+  .clt-ambient, .clt-ambient::before, .clt-ambient::after, .clt-ambient__blob,
+  .clt-lamp-layer.is-animated::before, .clt-lamp-layer.is-animated::after,
+  .clt-panel[data-variant="foil"], .clt-panel[data-variant="aurora"],
+  .clt-flicker, .clt-pulse-dot::after, .clt-spotlight::before,
+  .clt-skeleton__block::after, .clt-skeleton__line::after
+) { animation-play-state: paused; }
+
 /* ─── 19.4 · WebGL light-rays mount — the real ogl shader sits on a transparent
    canvas and screens its warm rays onto the panel; masked to fade out. ───── */
 .clt-rays-canvas {

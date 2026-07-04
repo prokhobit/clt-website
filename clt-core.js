@@ -1922,6 +1922,9 @@
         lastW = window.innerWidth;
 
       function units() {
+        // chars requested → animate chars (wrap "words,chars" so words still
+        // wrap as units); otherwise words, then lines.
+        if (isChars && split.chars && split.chars.length) return split.chars;
         return split.words && split.words.length
           ? split.words
           : split.chars && split.chars.length
@@ -2058,6 +2061,141 @@
     window.setTimeout(function () {
       if (ST && typeof ST.refresh === "function") ST.refresh();
     }, 0);
+  }
+
+  // ── arrival · house lights up on load (opt-in data-clt-arrival on <body>) ─
+  // A black scrim fades out over ~1.2s — the room lights coming up. Skipped
+  // when a curtain rise is pending (that IS the arrival), reduced motion, or
+  // no GSAP.
+  function initArrival() {
+    if (!document.body || !document.body.hasAttribute("data-clt-arrival")) return;
+    var gsap = window.gsap;
+    var pendingCurtain = false;
+    try {
+      pendingCurtain = sessionStorage.getItem("clt-curtain") === "1";
+    } catch (_) {}
+    if (env.reducedMotion || !gsap || pendingCurtain) return;
+    var dim = document.createElement("div");
+    dim.setAttribute("aria-hidden", "true");
+    dim.style.cssText =
+      "position:fixed;inset:0;z-index:9000;pointer-events:none;background:#000;opacity:0.94;";
+    document.body.appendChild(dim);
+    gsap.to(dim, {
+      opacity: 0,
+      duration: 1.2,
+      ease: CLT.motion.easeVelvet,
+      delay: 0.1,
+      onComplete: function () {
+        if (dim.parentNode) dim.parentNode.removeChild(dim);
+      },
+    });
+  }
+
+  // ── navbar condense (opt-in data-clt-navbar-condense on .clt-navbar-shell) ─
+  function initNavbarCondense() {
+    var ST = window.ScrollTrigger;
+    var els = $all("[data-clt-navbar-condense]");
+    if (!els.length) return;
+    els.forEach(function (shell) {
+      if (ST) {
+        ST.create({
+          start: 90,
+          end: "max",
+          toggleClass: { targets: shell, className: "is-condensed" },
+        });
+      } else {
+        var onS = function () {
+          shell.classList.toggle("is-condensed", window.scrollY > 90);
+        };
+        window.addEventListener("scroll", onS, { passive: true });
+        onS();
+      }
+    });
+  }
+
+  // ── promenade · pinned horizontal scroll (opt-in data-clt-promenade) ──────
+  // Desktop fine-pointer: pin the section and scrub the track sideways
+  // (--promenade 0→1 feeds the progress filament). Touch / reduced motion /
+  // no GSAP: the CSS native horizontal scroll with snap takes over.
+  function initPromenade() {
+    var gsap = window.gsap,
+      ST = window.ScrollTrigger;
+    var els = $all("[data-clt-promenade]");
+    if (!els.length) return;
+    if (env.reducedMotion || env.isTouch || !gsap || !ST) return;
+    els.forEach(function (sec) {
+      var track = $(".clt-promenade__track", sec);
+      if (!track) return;
+      sec.classList.add("is-pinned");
+      var set = gsap.quickSetter(sec, "--promenade");
+      var dist = function () {
+        return Math.max(0, track.scrollWidth - sec.clientWidth);
+      };
+      gsap.to(track, {
+        x: function () {
+          return -dist();
+        },
+        ease: "none", // required: scroll and position must map 1:1
+        scrollTrigger: {
+          trigger: sec,
+          start: "top top",
+          end: function () {
+            return "+=" + dist();
+          },
+          pin: true,
+          scrub: 1,
+          invalidateOnRefresh: true,
+          onUpdate: function (self) {
+            set(self.progress);
+          },
+        },
+      });
+    });
+  }
+
+  // ── form validation (opt-in data-clt-validate on <form>) ──────────────────
+  // Invalid submit: each bad .clt-field gets data-state="error" + message
+  // (data-error attr, else the native validationMessage); first bad field is
+  // focused. Errors clear per-field as the visitor types.
+  function initFieldValidation() {
+    $all("form[data-clt-validate]").forEach(function (form) {
+      form.setAttribute("novalidate", "");
+      form.addEventListener("submit", function (e) {
+        var bad = [];
+        $all(".clt-field", form).forEach(function (field) {
+          var input = field.querySelector("input, select, textarea");
+          if (!input) return;
+          if (input.checkValidity()) {
+            field.removeAttribute("data-state");
+          } else {
+            field.setAttribute("data-state", "error");
+            var err = field.querySelector(".clt-field__error, .clt-field__error-text");
+            if (err) {
+              err.textContent =
+                field.getAttribute("data-error") || input.validationMessage;
+            }
+            bad.push(input);
+          }
+        });
+        if (bad.length) {
+          e.preventDefault();
+          bad[0].focus();
+        }
+      });
+      form.addEventListener("input", function (e) {
+        var field = e.target && e.target.closest ? e.target.closest(".clt-field") : null;
+        if (field && e.target.checkValidity && e.target.checkValidity()) {
+          field.removeAttribute("data-state");
+        }
+      });
+    });
+  }
+
+  // ── idle-tab hygiene · pause ambience while the tab is hidden ─────────────
+  function initIdlePause() {
+    document.addEventListener("visibilitychange", function () {
+      document.documentElement.classList.toggle("clt-hidden", document.hidden);
+    });
   }
 
   // ── magnetic CTAs (opt-in [data-gsap~="clt-magnetic"]) ────────────────────
@@ -2270,6 +2408,7 @@
   function boot() {
     CLT.__booted = true;
     initMotion();
+    initArrival(); // must read the curtain flag before initCurtain consumes it
     initCurtain();
     initScroll();
     initLayoutRefresh();
@@ -2278,8 +2417,10 @@
     initDialogs();
     initTabs();
     initToggle();
+    initFieldValidation();
     initCardFlip();
     initSectionNav();
+    initNavbarCondense();
     initAmbient();
     initAmbientParallax();
     initPanelOrb();
@@ -2289,6 +2430,8 @@
     initReveal();
     initLamp();
     initHouseLights();
+    initPromenade();
+    initIdlePause();
     flushReady();
   }
   if (document.readyState === "loading") {
