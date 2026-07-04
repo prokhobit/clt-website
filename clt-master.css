@@ -15,7 +15,7 @@
                                    utilities, motion, components, events page.
      B. clt-ambient-variants.css — fixed ambient backgrounds (.clt-ambient):
                                    curtain · candlepool · spotlight · aurora ·
-                                   foil · marquee · embers · lacquer
+                                   lacquer
                                    (parallax magnitudes tuned by us).
      C. clt-components-ext.css   — EVERYTHING WE ADDED / OVERRODE:
           15  New components — person card, testimonial, tier, showcase,
@@ -2259,67 +2259,6 @@ a.clt-card:hover {
 }
 .clt-card__copy { color: var(--text-muted); }
 
-/* ─── 8.9  Ticket card (with perforated edge) ────────── */
-/* ─── 16.3 · Ticket — gilt-lined, glowing edge; stub gets a warm inner seam ── */
-.clt-ticket {
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr;
-  border-radius: var(--r-card);
-  border: 1px solid color-mix(in srgb, var(--clt-brass-rgb) 62%, transparent);
-  overflow: hidden;
-  background:
-    radial-gradient(ellipse 70% 100% at 0% 50%, color-mix(in srgb, var(--clt-velvet-rgb) 35%, transparent), transparent 70%),
-    linear-gradient(140deg, color-mix(in srgb, var(--clt-plum-rgb) 60%, transparent), color-mix(in srgb, var(--clt-void) 80%, transparent)),
-    var(--surface);
-  box-shadow:
-    var(--shadow-deep),
-    0 0 0 1px color-mix(in srgb, var(--clt-brass-rgb) 34%, transparent),
-    0 0 36px color-mix(in srgb, var(--clt-brass-rgb) 24%, transparent),
-    inset 0 0 26px color-mix(in srgb, var(--clt-brass-rgb) 9%, transparent);
-}
-@media (min-width: 36rem) {
-  .clt-ticket { grid-template-columns: minmax(0, 1.6fr) 1px minmax(0, 1fr); }
-  .clt-ticket__stub { border-left: 0; border-top: 0; }
-}
-.clt-ticket__main {
-  display: grid;
-  gap: 0.85rem;
-  padding: clamp(1.4rem, 2.4vw, 2rem);
-}
-.clt-ticket__perforation {
-  position: relative;
-  background-image: linear-gradient(180deg, transparent 30%, color-mix(in srgb, var(--clt-linen-rgb) 30%, transparent) 30% 70%, transparent 70%);
-  background-size: 1px 0.65rem;
-  background-repeat: repeat-y;
-  background-position: center;
-  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--clt-brass-rgb) 30%, transparent));
-}
-.clt-ticket__perforation::before,
-.clt-ticket__perforation::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  width: 1.2rem;
-  height: 1.2rem;
-  border-radius: 50%;
-  background: var(--clt-void);
-  transform: translateX(-50%);
-}
-.clt-ticket__perforation::before { top: -0.6rem; }
-.clt-ticket__perforation::after  { bottom: -0.6rem; }
-.clt-ticket__stub {
-  display: grid;
-  align-content: center;
-  gap: 0.45rem;
-  padding: clamp(1.4rem, 2.4vw, 2rem);
-  background: color-mix(in srgb, var(--clt-void) 70%, var(--clt-velvet) 30%);
-  text-align: center;
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--clt-brass-rgb) 26%, transparent),
-    inset 0 0 30px color-mix(in srgb, var(--clt-candle-rgb) 10%, transparent);
-}
-
 /* ─── 8.10  Stat panel ───────────────────────────────── */
 .clt-stat {
   display: grid;
@@ -4282,7 +4221,7 @@ body.clt-dialog-is-open {
      2. Paste this file into Project Settings → Custom Code (head)
         OR link as an external stylesheet.
      3. Swap the data-variant attribute to switch atmospheres:
-          curtain · candlepool · spotlight · aurora · foil · marquee
+          curtain · candlepool · spotlight · aurora · lacquer
      4. All animations honour prefers-reduced-motion automatically.
 
    Design intent:
@@ -4598,214 +4537,6 @@ body.clt-dialog-is-open {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   5 · FOIL — slow oscillating brass foil sheen, like brushed metal under
-   candlelight. Most "luxe" of the set.
-   Use when: ticket / box-office pages, gala announcements, premium states.
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.clt-ambient[data-variant="foil"] {
-  background:
-    linear-gradient(180deg, var(--clt-pitch) 0%, var(--clt-void) 100%);
-}
-
-/* Base foil — diagonal brushed-metal sheen, slow horizontal pan. */
-.clt-ambient[data-variant="foil"]::before {
-  content: "";
-  position: absolute; inset: -10%;
-  background:
-    repeating-linear-gradient(112deg,
-      transparent 0,
-      color-mix(in srgb, var(--clt-brass-rgb) 6%, transparent) 1px,
-      transparent 2px,
-      transparent 7px),
-    linear-gradient(112deg,
-      transparent 0%,
-      color-mix(in srgb, var(--clt-brass-rgb) 14%, transparent) 30%,
-      color-mix(in srgb, var(--clt-candle-rgb) 18%, transparent) 48%,
-      color-mix(in srgb, var(--clt-brass-rgb) 14%, transparent) 66%,
-      transparent 100%);
-  background-size: auto, 220% 220%;
-  mix-blend-mode: screen;
-  opacity: 0.78;
-  animation: clt-foil-pan 28s linear infinite;
-  /* Sheen catches and shifts toward the cursor. */
-  translate: calc(var(--ax) * 18px) calc(var(--ay) * 12px + var(--scr) * -0.02);
-}
-
-/* Counter-sheen — slow opposite-direction cold rim. */
-.clt-ambient[data-variant="foil"]::after {
-  content: "";
-  position: absolute; inset: -10%;
-  background: linear-gradient(292deg,
-    transparent 0%,
-    color-mix(in srgb, var(--clt-smoke-blue-rgb) 12%, transparent) 40%,
-    color-mix(in srgb, var(--clt-linen-rgb) 10%, transparent) 55%,
-    transparent 100%);
-  background-size: 220% 220%;
-  mix-blend-mode: screen;
-  opacity: 0.45;
-  animation: clt-foil-counter 36s linear infinite reverse;
-  /* Counter-sheen drifts the OTHER way — makes the metal feel hand-tilted. */
-  translate: calc(var(--ax) * -14px) calc(var(--ay) * -8px + var(--scr) * 0.025);
-}
-
-@keyframes clt-foil-pan {
-  0%   { background-position: 0 0,   0%   50%; }
-  100% { background-position: 0 0, 100%   50%; }
-}
-@keyframes clt-foil-counter {
-  0%   { background-position:   0% 50%; }
-  100% { background-position: 100% 50%; }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   6 · MARQUEE — soft warm bulb pulses around the page edge (theater marquee).
-   Use when: announcement pages, "tonight" / "live" states. Most overtly
-   theatrical of the set — use sparingly.
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.clt-ambient[data-variant="marquee"] {
-  background:
-    radial-gradient(ellipse 100% 60% at 50% 50%,
-      color-mix(in srgb, var(--clt-plum) 80%, transparent),
-      transparent 70%),
-    linear-gradient(180deg, var(--clt-pitch) 0%, var(--clt-void) 100%);
-}
-
-/* Dotted bulb ring — radial-gradient dots in two stacked rectangles tracing
-   the perimeter. We rely on background-position + size to space them. */
-.clt-ambient[data-variant="marquee"]::before {
-  content: "";
-  position: absolute;
-  inset: 2.6rem;
-  border-radius: 1.25rem;
-  background:
-    /* top + bottom edges */
-    radial-gradient(circle at 50% 50%,
-      color-mix(in srgb, var(--clt-candle-rgb) 90%, transparent) 0 2px,
-      color-mix(in srgb, var(--clt-brass-rgb)  60%, transparent) 2px 3.5px,
-      transparent 5px) 0 0 / 48px 24px repeat-x,
-    radial-gradient(circle at 50% 50%,
-      color-mix(in srgb, var(--clt-candle-rgb) 90%, transparent) 0 2px,
-      color-mix(in srgb, var(--clt-brass-rgb)  60%, transparent) 2px 3.5px,
-      transparent 5px) 0 100% / 48px 24px repeat-x,
-    /* left + right edges */
-    radial-gradient(circle at 50% 50%,
-      color-mix(in srgb, var(--clt-candle-rgb) 90%, transparent) 0 2px,
-      color-mix(in srgb, var(--clt-brass-rgb)  60%, transparent) 2px 3.5px,
-      transparent 5px) 0   0 / 24px 48px repeat-y,
-    radial-gradient(circle at 50% 50%,
-      color-mix(in srgb, var(--clt-candle-rgb) 90%, transparent) 0 2px,
-      color-mix(in srgb, var(--clt-brass-rgb)  60%, transparent) 2px 3.5px,
-      transparent 5px) 100% 0 / 24px 48px repeat-y;
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--clt-candle-rgb) 60%, transparent));
-  animation: clt-marquee-pulse 4.5s var(--ease) infinite;
-  opacity: 0.85;
-}
-
-/* A second, dimmer halo pass that pulses out of phase — creates the
-   "chasing bulbs" feeling without literally chasing. */
-.clt-ambient[data-variant="marquee"]::after {
-  content: "";
-  position: absolute;
-  inset: 2.6rem;
-  border-radius: 1.25rem;
-  box-shadow:
-    inset 0 0 40px color-mix(in srgb, var(--clt-brass-rgb) 22%, transparent),
-    inset 0 0 90px color-mix(in srgb, var(--clt-velvet-rgb) 38%, transparent);
-  animation: clt-marquee-halo 7s var(--ease) infinite;
-  /* Inner halo drifts toward the cursor — the room "watches you." */
-  translate: calc(var(--ax) * 6px) calc(var(--ay) * 4px + var(--scr) * -0.015);
-}
-
-@keyframes clt-marquee-pulse {
-  0%, 100% { opacity: 0.55; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--clt-candle-rgb) 40%, transparent)); }
-  50%      { opacity: 1;    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--clt-candle-rgb) 80%, transparent)); }
-}
-@keyframes clt-marquee-halo {
-  0%, 100% { opacity: 0.6; }
-  50%      { opacity: 1; }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   7 · EMBERS — slow rising warm sparks, with a velvet bottom wash and a
-   brass haze high up. The whole field drifts upward; mouse-x sways the
-   field laterally so the embers feel like they're caught in a draft.
-   Use when: programme outros, "after the curtain falls" pages, donate.
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.clt-ambient[data-variant="embers"] {
-  background:
-    /* deep velvet pool at the floor */
-    radial-gradient(ellipse 110% 55% at 50% 110%,
-      color-mix(in srgb, var(--clt-velvet-rgb) 56%, transparent),
-      color-mix(in srgb, var(--clt-velvet-rgb) 18%, transparent) 38%,
-      transparent 72%),
-    /* faint warm haze along the ceiling */
-    radial-gradient(ellipse 90% 30% at 50% -8%,
-      color-mix(in srgb, var(--clt-brass-rgb) 14%, transparent),
-      transparent 70%),
-    linear-gradient(180deg, var(--clt-pitch) 0%, var(--clt-void) 100%);
-}
-
-/* Ember field — two stacked layers of warm radial sparks at different
-   sizes + speeds. background-position-y animates upward; the band tiles
-   so it loops seamlessly. */
-.clt-ambient[data-variant="embers"]::before {
-  content: "";
-  position: absolute;
-  inset: -10% -6% -6% -6%;
-  background:
-    radial-gradient(circle at 12% 18%,
-      color-mix(in srgb, var(--clt-candle-rgb) 78%, transparent) 0 1.4px,
-      color-mix(in srgb, var(--clt-brass-rgb)  40%, transparent) 1.4px 2.6px,
-      transparent 4px) 0 0 / 220px 320px,
-    radial-gradient(circle at 64% 72%,
-      color-mix(in srgb, var(--clt-candle-rgb) 86%, transparent) 0 1.8px,
-      color-mix(in srgb, var(--clt-brass-rgb)  46%, transparent) 1.8px 3.2px,
-      transparent 5px) 0 0 / 180px 260px,
-    radial-gradient(circle at 38% 44%,
-      color-mix(in srgb, var(--clt-brass-rgb)  60%, transparent) 0 1px,
-      transparent 3px) 0 0 / 140px 220px;
-  filter: blur(0.4px) drop-shadow(0 0 6px color-mix(in srgb, var(--clt-candle-rgb) 45%, transparent));
-  mix-blend-mode: screen;
-  opacity: 0.78;
-  animation: clt-embers-rise 22s linear infinite;
-  /* The whole field sways with the cursor; scroll lifts it further. */
-  translate: calc(var(--ax) * 14px) calc(var(--scr) * -0.05);
-}
-
-/* A second, larger ember pass — slower, dimmer, more brass. */
-.clt-ambient[data-variant="embers"]::after {
-  content: "";
-  position: absolute;
-  inset: -10% -6%;
-  background:
-    radial-gradient(circle at 28% 86%,
-      color-mix(in srgb, var(--clt-candle-rgb) 70%, transparent) 0 2.4px,
-      color-mix(in srgb, var(--clt-brass-rgb)  30%, transparent) 2.4px 4px,
-      transparent 7px) 0 0 / 360px 520px,
-    radial-gradient(circle at 78% 28%,
-      color-mix(in srgb, var(--clt-brass-rgb) 58%, transparent) 0 1.6px,
-      transparent 5px) 0 0 / 300px 460px;
-  filter: blur(1px);
-  mix-blend-mode: screen;
-  opacity: 0.6;
-  animation: clt-embers-rise-slow 38s linear infinite;
-  /* Opposite sway — different draft, depth illusion. */
-  translate: calc(var(--ax) * -10px) calc(var(--scr) * -0.025);
-}
-
-@keyframes clt-embers-rise {
-  0%   { background-position: 0   0,   0   0,   0   0; }
-  100% { background-position: 0 -320px, 0 -260px, 0 -220px; }
-}
-@keyframes clt-embers-rise-slow {
-  0%   { background-position: 0   0,   0   0; }
-  100% { background-position: 0 -520px, 0 -460px; }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
    8 · LACQUER — a high-gloss black lacquer surface with a slow brass
    reflection sweep. The shine center tracks the cursor, like real lacquer
    catching a candle as you move past it. Most "expensive" of the set.
@@ -5111,6 +4842,113 @@ a.clt-person-card:hover {
   }
   .clt-person-card.is-horizontal .clt-person-card__body { align-content: center; }
 }
+
+/* ─── 15.35 · Flip person card — GSAP Flip expand/collapse (clt-core initCardFlip)
+   data-expanded="false" → horizontal list row (4rem brass medallion · role/name · toggle)
+   data-expanded="true"  → centered detail card (6.75rem medallion · bio · socials)
+   GSAP Flip animates the morph; CSS defines only the two end-states. Children are
+   BARE classes (.avatar/.body/.role/.name/.bio/.socials/.flip-toggle) — the literal
+   contract initCardFlip reads. Ported from the v2 nested sheet (2026-07-04). ─── */
+.clt-person-card[data-clt-cardflip] {
+  overflow: visible;                 /* let the medallion glow spill */
+  padding: clamp(1rem, 2vw, 1.35rem);
+  gap: 1rem;
+}
+.clt-person-card[data-clt-cardflip] > .avatar {
+  position: relative;
+  flex: 0 0 auto;
+  width: 4rem; height: 4rem;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--clt-brass-rgb) 52%, transparent);
+  box-shadow: inset 0 1px 0 rgb(255 244 218 / 0.16),
+              0 0 16px color-mix(in srgb, var(--clt-brass-rgb) 22%, transparent);
+  transition: box-shadow var(--dur-base) var(--ease);
+}
+.clt-person-card[data-clt-cardflip] > .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.clt-person-card[data-clt-cardflip] > .avatar .clt-media-ph { min-height: 0; height: 100%; }
+.clt-person-card[data-clt-cardflip] > .avatar .seal {
+  border: 0; background: none; box-shadow: none;
+  width: auto; height: auto; font-size: 1.05rem;
+}
+.clt-person-card[data-clt-cardflip] > .body { display: grid; gap: 0.15rem; min-width: 0; padding: 0; }
+.clt-person-card[data-clt-cardflip] .role {
+  font-size: var(--type-eyebrow); font-weight: 700;
+  letter-spacing: var(--tracking-eyebrow); text-transform: uppercase;
+  color: var(--clt-brass-300);
+}
+.clt-person-card[data-clt-cardflip] .name {
+  font-family: var(--font-display); font-weight: 500;
+  font-size: clamp(1.2rem, 1rem + 0.7vw, 1.55rem); line-height: 1.08;
+  letter-spacing: -0.012em; color: var(--clt-linen-100); margin: 0;
+}
+.clt-person-card[data-clt-cardflip] .bio {
+  color: var(--text-muted); font-size: 0.94rem; line-height: 1.6; margin: 0.5rem 0 0;
+}
+.clt-person-card[data-clt-cardflip] .socials { display: flex; gap: 0.5rem; margin-top: 0.7rem; }
+.clt-person-card[data-clt-cardflip] .socials a {
+  display: grid; place-items: center;
+  width: 2.75rem; height: 2.75rem;   /* 44px touch target */
+  border-radius: 50%;
+  border: 1px solid var(--line); color: var(--text-muted);
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.clt-person-card[data-clt-cardflip] .socials a:hover {
+  color: var(--clt-brass-100);
+  border-color: color-mix(in srgb, var(--clt-brass-rgb) 48%, transparent);
+  background: color-mix(in srgb, var(--clt-brass-rgb) 10%, transparent);
+}
+.clt-person-card[data-clt-cardflip] .socials svg { width: 1.15rem; height: 1.15rem; }
+.clt-person-card[data-clt-cardflip] > .flip-toggle {
+  flex: 0 0 auto;
+  align-self: center;
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.95rem;
+  border-radius: var(--r-pill);
+  border: 1px solid color-mix(in srgb, var(--clt-brass-rgb) 38%, transparent);
+  background: color-mix(in srgb, var(--clt-brass-rgb) 8%, transparent);
+  color: var(--clt-brass-100);
+  font: inherit; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.04em;
+  white-space: nowrap; cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.clt-person-card[data-clt-cardflip] > .flip-toggle .chev { transition: transform var(--dur-base) var(--ease-stage); }
+.clt-person-card[data-clt-cardflip] > .flip-toggle:hover {
+  background: color-mix(in srgb, var(--clt-brass-rgb) 16%, transparent);
+  color: var(--clt-bone);
+  border-color: color-mix(in srgb, var(--clt-brass-rgb) 56%, transparent);
+}
+.clt-person-card[data-clt-cardflip] > .flip-toggle:active { transform: scale(0.97); }
+.clt-person-card[data-clt-cardflip] > .flip-toggle:focus-visible { outline: 2px solid var(--clt-brass-200); outline-offset: 3px; }
+
+/* Collapsed · horizontal list row */
+.clt-person-card[data-expanded="false"] {
+  flex-direction: row;
+  align-items: center;
+}
+.clt-person-card[data-expanded="false"] > .flip-toggle { margin-left: auto; }
+.clt-person-card[data-expanded="false"] .bio,
+.clt-person-card[data-expanded="false"] .socials { display: none; }
+
+/* Expanded · vertical detail card */
+.clt-person-card[data-expanded="true"] {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.85rem;
+  padding: clamp(1.6rem, 3vw, 2.25rem);
+}
+.clt-person-card[data-expanded="true"] > .avatar {
+  width: 6.75rem; height: 6.75rem;
+  box-shadow: inset 0 1px 0 rgb(255 244 218 / 0.2),
+              0 0 34px color-mix(in srgb, var(--clt-brass-rgb) 34%, transparent);
+}
+.clt-person-card[data-expanded="true"] > .body { justify-items: center; }
+.clt-person-card[data-expanded="true"] .bio { max-width: 42ch; }
+.clt-person-card[data-expanded="true"] .socials { display: flex; justify-content: center; }
+.clt-person-card[data-expanded="true"] > .flip-toggle .chev { transform: rotate(180deg); }
 
 /* ════════════════════════════════════════════════════════════════════════
    15.4 · TESTIMONIAL / REVIEW CARD
