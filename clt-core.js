@@ -218,6 +218,28 @@
     document.head.appendChild(style);
   }
 
+  // ── motion grammar · register the CSS easing curves as named GSAP eases ───
+  // Mirrors the :root tokens in clt-master.css (--ease/--ease-stage/--ease-velvet)
+  // so JS and CSS motion share one vocabulary. Fallbacks approximate the curves.
+  function initMotion() {
+    var gsap = window.gsap,
+      CE = window.CustomEase;
+    CLT.motion = {
+      dur: { instant: 0.09, fast: 0.22, base: 0.38, slow: 0.7, curtain: 1.1 },
+      ease: "power3.out",
+      easeStage: "expo.out",
+      easeVelvet: "power4.inOut",
+    };
+    if (!gsap || !CE) return;
+    registerGsapPlugin(CE);
+    CE.create("clt", "0.2,0.8,0.2,1");
+    CE.create("clt-stage", "0.32,0.72,0,1");
+    CE.create("clt-velvet", "0.65,0,0.05,1");
+    CLT.motion.ease = "clt";
+    CLT.motion.easeStage = "clt-stage";
+    CLT.motion.easeVelvet = "clt-velvet";
+  }
+
   function initScroll() {
     var gsap = window.gsap,
       ST = window.ScrollTrigger,
@@ -1190,13 +1212,106 @@
     });
   }
 
+  // ── Person-card flip: horizontal collapsed ⇄ expanded vertical (GSAP Flip) ──
+  function initCardFlip(root) {
+    var gsap = window.gsap,
+      Flip = window.Flip;
+    if (gsap && Flip && !initCardFlip.__reg) {
+      gsap.registerPlugin(Flip);
+      initCardFlip.__reg = true;
+    }
+    $all("[data-clt-cardflip]", root || document).forEach(function (card) {
+      if (card.__cltCardFlipReady) return;
+      card.__cltCardFlipReady = true;
+
+      var toggle = card.querySelector("[data-card-toggle]");
+      if (!toggle) return;
+      if (!card.hasAttribute("data-expanded"))
+        card.setAttribute("data-expanded", "false");
+
+      function syncLabel() {
+        var expanded = card.getAttribute("data-expanded") === "true";
+        toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+        var lbl = toggle.querySelector(".label");
+        if (lbl) lbl.textContent = expanded ? "Hide bio" : "Read bio";
+      }
+      syncLabel();
+
+      toggle.addEventListener("click", function () {
+        var next =
+          card.getAttribute("data-expanded") === "true" ? "false" : "true";
+
+        // No GSAP/Flip or reduced motion → instant, accessible toggle.
+        if (
+          !gsap ||
+          !Flip ||
+          (window.matchMedia &&
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+        ) {
+          card.setAttribute("data-expanded", next);
+          syncLabel();
+          return;
+        }
+
+        // FLIP: measure the whole grid + the nested parts that resize/move, so the
+        // avatar scales, text repositions, and sibling cards reflow without jumps.
+        var expanding = next === "true";
+        var grid = card.parentElement || card;
+        var targets = $all(
+          ".clt-person-card, .clt-person-card .avatar, .clt-person-card .seal, " +
+            ".clt-person-card .body, .clt-person-card .role, .clt-person-card .name, " +
+            ".clt-person-card .bio, .clt-person-card .socials, .clt-person-card .flip-toggle",
+          grid,
+        );
+        var state = Flip.getState(targets);
+
+        card.setAttribute("data-expanded", next);
+        syncLabel();
+
+        Flip.from(state, {
+          // ease-out + longer to open, ease-in + faster to close (exit < enter)
+          duration: expanding ? 0.6 : 0.44,
+          ease: expanding ? "power3.out" : "power3.in",
+          absolute: true, // take movers out of flow → siblings don't jump mid-tween
+          nested: true, // correctly handle nested transforms (avatar inside card)
+          prune: true, // skip targets that didn't actually change
+          onEnter: function (els) {
+            return gsap.fromTo(
+              els,
+              { opacity: 0, scale: 0.92 },
+              {
+                opacity: 1,
+                scale: 1,
+                duration: 0.4,
+                delay: expanding ? 0.1 : 0,
+                ease: "power2.out",
+              },
+            );
+          },
+          onLeave: function (els) {
+            return gsap.to(els, {
+              opacity: 0,
+              scale: 0.95,
+              duration: 0.22,
+              ease: "power1.in",
+            });
+          },
+        });
+      });
+    });
+  }
+
   function initSectionNav(root) {
     $all("[data-clt-sectionnav]", root || document).forEach(function (nav) {
       var links = $all(".clt-sectionnav__link", nav);
       if (!links.length) return;
+      // Cache the scroll range so we don't force a layout (scrollHeight read)
+      // on every scroll event — only on init and resize.
+      var max = 1;
+      function measure() {
+        max = document.documentElement.scrollHeight - window.innerHeight || 1;
+      }
       function update() {
-        var max =
-          document.documentElement.scrollHeight - window.innerHeight || 1;
         var y =
           CLT.lenis && typeof CLT.lenis.scroll === "number"
             ? CLT.lenis.scroll
@@ -1211,9 +1326,24 @@
           else l.removeAttribute("aria-current");
         });
       }
+      // rAF-throttle scroll so update runs at most once per frame.
+      var ticking = false;
+      function onScroll() {
+        if (ticking) return;
+        ticking = true;
+        window.requestAnimationFrame(function () {
+          ticking = false;
+          update();
+        });
+      }
+      function onResize() {
+        measure();
+        update();
+      }
+      measure();
       update();
-      window.addEventListener("scroll", update, { passive: true });
-      window.addEventListener("resize", update);
+      window.addEventListener("scroll", onScroll, { passive: true });
+      window.addEventListener("resize", onResize);
     });
   }
 
@@ -1658,7 +1788,7 @@
     var stagger = typeof cfg.stagger === "number" ? cfg.stagger : 0.09;
     var duration = typeof cfg.duration === "number" ? cfg.duration : 1.05;
     var distance = cfg.distance || "2.25rem";
-    var ease = cfg.ease || "expo.out";
+    var ease = cfg.ease || CLT.motion.easeStage;
     var strike = cfg.strike !== false;
     var replay = cfg.replay !== false;
 
@@ -1785,6 +1915,8 @@
     els.forEach(function (el) {
       var type = el.getAttribute("data-clt-split") || "lines,words";
       if (!type) type = "lines,words";
+      // chars = curtain-call sweep: tighter stagger, slightly quicker rise
+      var isChars = type.indexOf("chars") >= 0;
       var split = null,
         assembled = false,
         lastW = window.innerWidth;
@@ -1829,9 +1961,9 @@
             gsap.to(units(), {
               yPercent: 0,
               opacity: 1,
-              duration: duration,
+              duration: isChars ? duration * 0.75 : duration,
               ease: ease,
-              stagger: stagger * 0.5,
+              stagger: isChars ? Math.min(0.022, stagger * 0.25) : stagger * 0.5,
               overwrite: "auto",
             });
           } else {
@@ -1928,6 +2060,123 @@
     }, 0);
   }
 
+  // ── magnetic CTAs (opt-in [data-gsap~="clt-magnetic"]) ────────────────────
+  // Element leans toward the cursor (data-clt-magnet tunes pull, default 0.32),
+  // settles back on an elastic when the cursor leaves. Fine pointers only.
+  function initMagnetic() {
+    var gsap = window.gsap;
+    if (env.reducedMotion || env.isTouch || !gsap) return;
+    $all('[data-gsap~="clt-magnetic"]').forEach(function (el) {
+      var strength = parseFloat(el.getAttribute("data-clt-magnet")) || 0.32;
+      var qx = gsap.quickTo(el, "x", { duration: 0.35, ease: "power3.out" });
+      var qy = gsap.quickTo(el, "y", { duration: 0.35, ease: "power3.out" });
+      el.addEventListener("mousemove", function (e) {
+        var r = el.getBoundingClientRect();
+        qx((e.clientX - (r.left + r.width / 2)) * strength);
+        qy((e.clientY - (r.top + r.height / 2)) * strength);
+      });
+      el.addEventListener("mouseleave", function () {
+        gsap.to(el, {
+          x: 0,
+          y: 0,
+          duration: 0.7,
+          ease: "elastic.out(1, 0.45)",
+          overwrite: "auto",
+        });
+      });
+    });
+  }
+
+  // ── 3D tilt (opt-in [data-gsap~="clt-tilt"]) ──────────────────────────────
+  // Panel leans toward the cursor (data-clt-tilt-max degrees, default 6). Pairs
+  // with the panel cursor-orb sheen, which already tracks --mx/--my.
+  function initTilt() {
+    var gsap = window.gsap;
+    if (env.reducedMotion || env.isTouch || !gsap) return;
+    $all('[data-gsap~="clt-tilt"]').forEach(function (el) {
+      var max = parseFloat(el.getAttribute("data-clt-tilt-max")) || 6;
+      var qrx = gsap.quickTo(el, "rotationX", { duration: 0.45, ease: "power2.out" });
+      var qry = gsap.quickTo(el, "rotationY", { duration: 0.45, ease: "power2.out" });
+      gsap.set(el, { transformPerspective: 900, transformOrigin: "center" });
+      el.addEventListener("mousemove", function (e) {
+        var r = el.getBoundingClientRect();
+        var px = (e.clientX - r.left) / r.width;
+        var py = (e.clientY - r.top) / r.height;
+        qrx((0.5 - py) * max * 2);
+        qry((px - 0.5) * max * 2);
+      });
+      el.addEventListener("mouseleave", function () {
+        gsap.to(el, {
+          rotationX: 0,
+          rotationY: 0,
+          duration: 0.8,
+          ease: "elastic.out(1, 0.5)",
+          overwrite: "auto",
+        });
+      });
+    });
+  }
+
+  // ── scramble-in text (opt-in [data-clt-scramble]) ─────────────────────────
+  // Playbill flipboard for dates/counts: text scrambles into place once on
+  // enter. Needs ScrambleTextPlugin; without it the text simply stays put.
+  function initScramble() {
+    var gsap = window.gsap,
+      ST = window.ScrollTrigger,
+      SP = window.ScrambleTextPlugin;
+    var els = $all("[data-clt-scramble]");
+    if (!els.length) return;
+    if (env.reducedMotion || !gsap || !ST || !SP) return;
+    registerGsapPlugin(SP);
+    els.forEach(function (el) {
+      var original = el.textContent;
+      ST.create({
+        trigger: el,
+        start: "top 88%",
+        once: true,
+        onEnter: function () {
+          gsap.to(el, {
+            duration: 0.9,
+            scrambleText: { text: original, chars: "IVXLCDM0123456789·", speed: 0.8 },
+            ease: "none",
+          });
+        },
+      });
+    });
+  }
+
+  // ── house lights · scroll-scrubbed --house dial (opt-in data-clt-house) ───
+  // Drives --house 0→1→0 as the section crosses the viewport (peak at center);
+  // clt-master.css maps it onto the section's candle pool / lamps / spot glow.
+  function initHouseLights() {
+    var gsap = window.gsap,
+      ST = window.ScrollTrigger;
+    var els = $all("[data-clt-house]");
+    if (!els.length) return;
+    if (env.reducedMotion || !gsap || !ST) {
+      els.forEach(function (el) {
+        el.style.setProperty("--house", "1");
+      });
+      return;
+    }
+    els.forEach(function (el) {
+      var set = gsap.quickSetter(el, "--house");
+      var dial = function (self) {
+        // triangle peak at viewport center, smoothed to a sine crest
+        var t = 1 - Math.abs(self.progress - 0.5) * 2;
+        set(Math.sin((t * Math.PI) / 2));
+      };
+      ST.create({
+        trigger: el,
+        start: "top bottom",
+        end: "bottom top",
+        onUpdate: dial,
+        onRefresh: dial,
+        invalidateOnRefresh: true,
+      });
+    });
+  }
+
   // ── ambient "Acts" — per-section variant crossfade (opt-in) ────────────────
   function initAmbient() {
     var amb = $(".clt-ambient");
@@ -2020,6 +2269,7 @@
   // ── boot ────────────────────────────────────────────────────────────────
   function boot() {
     CLT.__booted = true;
+    initMotion();
     initCurtain();
     initScroll();
     initLayoutRefresh();
@@ -2028,12 +2278,17 @@
     initDialogs();
     initTabs();
     initToggle();
+    initCardFlip();
     initSectionNav();
     initAmbient();
     initAmbientParallax();
     initPanelOrb();
+    initMagnetic();
+    initTilt();
+    initScramble();
     initReveal();
     initLamp();
+    initHouseLights();
     flushReady();
   }
   if (document.readyState === "loading") {
