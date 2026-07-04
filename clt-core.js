@@ -1934,6 +1934,13 @@
       function build() {
         if (split) split.revert();
         split = Split.create(el, { type: type, linesClass: "clt-split-line" });
+        // background-clip:text doesn't survive SplitText's transformed char
+        // wrappers (glyphs go transparent) — re-apply the foil clip on every
+        // wrapper inside a foil span; the vertical gradient makes the per-char
+        // clip seamless.
+        $all(".clt-text-foil div", el).forEach(function (d) {
+          d.classList.add("clt-text-foil");
+        });
         var u = units();
         if (!u || !u.length) return;
         gsap.set(
@@ -2283,6 +2290,35 @@
     });
   }
 
+  // ── parallax drift (opt-in data-clt-parallax="<percent>") ─────────────────
+  // Element drifts vertically by ±percent/2 as its parent traverses the
+  // viewport. Negative = rises against scroll (feels lifted), positive = lags.
+  function initParallax() {
+    var gsap = window.gsap,
+      ST = window.ScrollTrigger;
+    var els = $all("[data-clt-parallax]");
+    if (!els.length) return;
+    if (env.reducedMotion || !gsap || !ST) return;
+    els.forEach(function (el) {
+      var amt = parseFloat(el.getAttribute("data-clt-parallax")) || -10;
+      gsap.fromTo(
+        el,
+        { yPercent: -amt / 2 },
+        {
+          yPercent: amt / 2,
+          ease: "none",
+          scrollTrigger: {
+            trigger: el.parentElement || el,
+            start: "top bottom",
+            end: "bottom top",
+            scrub: true,
+            invalidateOnRefresh: true,
+          },
+        },
+      );
+    });
+  }
+
   // ── house lights · scroll-scrubbed --house dial (opt-in data-clt-house) ───
   // Drives --house 0→1→0 as the section crosses the viewport (peak at center);
   // clt-master.css maps it onto the section's candle pool / lamps / spot glow.
@@ -2430,6 +2466,7 @@
     initReveal();
     initLamp();
     initHouseLights();
+    initParallax();
     initPromenade();
     initIdlePause();
     flushReady();

@@ -6041,6 +6041,10 @@ small { font-weight: 500; }
 }
 .clt-showcard__sub { font-size: 0.92rem; color: var(--text-muted); margin: 0; }
 .clt-showcard__sub .dot { color: var(--clt-brass-300); margin: 0 0.4rem; }
+@media (max-width: 30rem) {
+  .clt-showcard { grid-template-columns: auto 1fr; }
+  .clt-showcard .clt-button { grid-column: 1 / -1; justify-content: center; }
+}
 
 /* ─── 19.38 · Skeleton — brass-shimmer loading vocabulary ───────────────────
    <div class="clt-skeleton"><span class="clt-skeleton__block"></span>
@@ -6092,6 +6096,54 @@ small { font-weight: 500; }
 }
 .clt-navbar-shell.is-condensed .clt-navbar__seal { transform: scale(0.85); }
 
+/* ─── 19.395 · Dust canopy — the foreground voice of the atmosphere ─────────
+   (Previously Designer-only CSS; canonical here so every page can carry it.)
+   <div class="clt-home-dust" aria-hidden="true">
+     <div id="dust-far"></div><div id="dust-mid"></div><div id="dust-near"></div>
+   </div>
+   clt-core initDust spawns .is-particle spans in the three layers. */
+.clt-home-dust {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 0.4;
+}
+.clt-home-dust.is-layer,
+.clt-home-dust > div { position: absolute; inset: 0; }
+/* initDust spawns <div class="clt-home-dust is-particle is-<tone>"> */
+.clt-home-dust.is-particle {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform, opacity;
+  animation: clt-dust-twinkle var(--twinkle-dur, 3s) infinite ease-in-out;
+  animation-delay: var(--twinkle-delay, 0s);
+  transition: transform 0.15s linear;
+}
+.clt-home-dust.is-particle.is-warm {
+  background: color-mix(in srgb, var(--clt-linen-rgb) 86%, transparent);
+  box-shadow: 0 0 9px color-mix(in srgb, var(--clt-linen-rgb) 58%, transparent),
+              0 0 24px color-mix(in srgb, var(--clt-linen-rgb) 20%, transparent);
+}
+.clt-home-dust.is-particle.is-brass {
+  background: color-mix(in srgb, var(--clt-candle-rgb) 82%, transparent);
+  box-shadow: 0 0 11px color-mix(in srgb, var(--clt-candle-rgb) 52%, transparent),
+              0 0 30px color-mix(in srgb, var(--clt-brass-rgb) 25%, transparent);
+}
+.clt-home-dust.is-particle.is-cool {
+  background: color-mix(in srgb, var(--clt-smoke-blue-rgb) 78%, transparent);
+  box-shadow: 0 0 11px color-mix(in srgb, var(--clt-smoke-blue-rgb) 48%, transparent),
+              0 0 30px color-mix(in srgb, var(--clt-smoke-blue-rgb) 22%, transparent);
+}
+@keyframes clt-dust-twinkle {
+  0%, 100% { opacity: var(--twinkle-lo, 0.2); }
+  50%      { opacity: var(--twinkle-hi, 0.85); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .clt-home-dust.is-particle { animation: none; }
+}
+
 /* ─── 19.40 · Idle-tab hygiene — clt-core adds html.clt-hidden when the tab is
    hidden; every infinite ambience pauses (battery + thermal). ─────────────── */
 html.clt-hidden :is(
@@ -6100,6 +6152,7 @@ html.clt-hidden :is(
   .clt-lamp-layer.is-animated::before, .clt-lamp-layer.is-animated::after,
   .clt-panel[data-variant="foil"], .clt-panel[data-variant="aurora"],
   .clt-flicker, .clt-pulse-dot::after, .clt-spotlight::before,
+  .clt-home-dust.is-particle,
   .clt-skeleton__block::after, .clt-skeleton__line::after
 ) { animation-play-state: paused; }
 
