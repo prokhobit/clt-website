@@ -1038,7 +1038,6 @@ window.CLT_HERO_FRAMES = [
         .to(
           item,
           {
-            filter: "brightness(1.08)",
             duration: reduced ? 0.01 : 0.34,
           },
           0,
