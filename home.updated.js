@@ -905,11 +905,6 @@ window.CLT_HERO_FRAMES = [
       force3D: true,
     });
 
-    gsap.set(posters, {
-      transformOrigin: "50% 50%",
-      force3D: true,
-    });
-
     var writeTrackX = gsap.quickSetter(track, "x", "px");
     function setTrackX(value) {
       writeTrackX(wrapNegativeX(value, setWidth));
