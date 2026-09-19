@@ -905,6 +905,11 @@ window.CLT_HERO_FRAMES = [
       force3D: true,
     });
 
+    gsap.set(posters, {
+      transformOrigin: "50% 50%",
+      force3D: true,
+    });
+
     var writeTrackX = gsap.quickSetter(track, "x", "px");
     function setTrackX(value) {
       writeTrackX(wrapNegativeX(value, setWidth));
@@ -1033,7 +1038,6 @@ window.CLT_HERO_FRAMES = [
         .to(
           item,
           {
-            y: -8,
             filter: "brightness(1.08)",
             duration: reduced ? 0.01 : 0.34,
           },
@@ -1042,9 +1046,6 @@ window.CLT_HERO_FRAMES = [
         .to(
           poster,
           {
-            scaleX: 1.045,
-            scaleY: 1.045,
-            filter: "saturate(1.12) contrast(1.05)",
             duration: reduced ? 0.01 : 0.56,
             ease: "power2.out",
           },
