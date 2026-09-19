@@ -1,4 +1,4 @@
-/* Standalone homepage replacement. Load once after GSAP and clt-core.updated.js. */
+/* Homepage memory + native-touch revision. Replace earlier home scripts; load once after GSAP and core. */
 window.CLT_HERO_FRAMES = [
   "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a35ad19668aae30c2f4_frame-0001.avif",
   "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a35c6cbe27116ca83fd_frame-0002.avif",
@@ -251,8 +251,12 @@ window.CLT_HERO_FRAMES = [
 
   var win = window;
   var doc = document;
-  if (win.__cltHomeLoaded) return;
+  if (win.__cltHomeLoaded) {
+    win.console.warn("[CLT home] Duplicate homepage script ignored. Load only home.optimized.js.");
+    return;
+  }
   win.__cltHomeLoaded = true;
+  win.CLT_HOME_VERSION = "2026-09-19-native-rails-bounded-cache";
 
   var SELECTOR = {
     heroSection: ".home-hero",
@@ -434,165 +438,203 @@ window.CLT_HERO_FRAMES = [
     var section = query(SELECTOR.heroSection);
     var canvas = query(SELECTOR.heroCanvas, section);
     var urls = win.CLT_HERO_FRAMES || [];
-
-    if (!section || !canvas || !urls.length || !ScrollTrigger) return;
-
+    if (!section || !canvas || !urls.length) return;
     var context = canvas.getContext("2d", { alpha: false });
     if (!context) return;
 
     var reduced = state.reduced;
-    var isMobileLike = win.matchMedia(
-      "(max-width: 760px), (pointer: coarse)",
-    ).matches;
-    // Frame-step downsamples the 244-frame sequence: desktop uses every 2nd
-    // frame (~122), mobile every 4th (~61). Halves network requests + decode
-    // with no perceptible loss at scrub speed.
+    var isMobileLike = win.matchMedia("(max-width: 760px), (pointer: coarse)").matches;
+    var staticFrame = reduced || !ScrollTrigger;
     var step = isMobileLike ? 4 : 2;
     var total = urls.length;
-    var frames = new Array(total);
-    var currentFrame = 0;
-    var cssWidth = 0;
-    var cssHeight = 0;
-    var drawnImage = null;
-    var heroDisposed = false, idleHandle = null;
-    state.cleanups.push(function () {
-      heroDisposed = true;
-      if (win.cancelIdleCallback) win.cancelIdleCallback(idleHandle);
-      else win.clearTimeout(idleHandle);
-    });
+    var cfg = win.CLT_HOME_CONFIG || {};
+    function option(name, fallback, min, max) {
+      var value = Number(cfg[name]);
+      return Number.isFinite(value) && value > 0 ? Math.round(clamp(min, max, value)) : fallback;
+    }
+    // These bounds apply to application-owned, downsampled canvas buffers.
+    // Browser image decoder / network / GPU caches remain browser-controlled.
+    var cacheLimit = staticFrame ? 1 : option("heroCacheFrames", isMobileLike ? 6 : 10, 2, 16);
+    var maxPixels = option("heroMaxPixels", isMobileLike ? 750000 : 1500000, 150000, 2073600);
+    var concurrency = isMobileLike ? 2 : 3;
+    var cache = new Map(), pending = new Map(), failed = new Map();
+    var wanted = [], queue = [];
+    var currentFrame = 0, lastDrawn = -1;
+    var cssWidth = 0, cssHeight = 0, pixelRatio = 0;
+    var disposed = false, nearViewport = true, paintFrame = 0;
+    var bufferWidth = 1, bufferHeight = 1;
 
     function normalizeFrame(index) {
-      var rounded = Math.round(index);
-      if (step !== 1) rounded = Math.round(rounded / step) * step;
-      return clamp(0, total - 1, rounded);
+      return staticFrame ? 0 : clamp(0, total - 1, Math.round(index / step) * step);
     }
-
-    function loadFrame(index) {
-      index = normalizeFrame(index);
-      if (frames[index] !== undefined) return;
-
+    function enabled() { return !disposed && nearViewport && !doc.hidden; }
+    function releaseBuffer(entry) {
+      entry.canvas.width = 0;
+      entry.canvas.height = 0;
+    }
+    function clearCache() {
+      cache.forEach(releaseBuffer);
+      cache.clear();
+      lastDrawn = -1;
+    }
+    function cancelPending() {
+      pending.forEach(function (job) {
+        job.image.onload = job.image.onerror = null;
+        job.image.removeAttribute("src");
+      });
+      pending.clear();
+      queue = [];
+    }
+    function trimForInsert() {
+      if (cache.size < cacheLimit) return;
+      var victim = null, distance = -1;
+      cache.forEach(function (_entry, index) {
+        var d = Math.abs(index - currentFrame);
+        if (d > distance) { distance = d; victim = index; }
+      });
+      if (victim !== null) { releaseBuffer(cache.get(victim)); cache.delete(victim); }
+    }
+    function paint() {
+      paintFrame = 0;
+      if (!enabled() || !cache.size) return;
+      var closest = null, distance = Infinity;
+      cache.forEach(function (_entry, index) {
+        var d = Math.abs(index - currentFrame);
+        if (d < distance) { closest = index; distance = d; }
+      });
+      if (closest === lastDrawn) return;
+      context.drawImage(cache.get(closest).canvas, 0, 0, canvas.width, canvas.height);
+      lastDrawn = closest;
+    }
+    function schedulePaint() {
+      if (!paintFrame && enabled()) paintFrame = win.requestAnimationFrame(paint);
+    }
+    function pump() {
+      if (!enabled()) return;
+      while (pending.size < concurrency && queue.length) {
+        var index = queue.shift();
+        if (cache.has(index) || pending.has(index)) continue;
+        var retryAt = failed.get(index) || 0;
+        if (retryAt > Date.now()) continue;
+        load(index);
+      }
+    }
+    function load(index) {
       var image = new Image();
+      var job = { image: image };
+      pending.set(index, job);
       image.decoding = "async";
-      frames[index] = false;
-
       image.onload = function () {
-        if (heroDisposed) return;
-        frames[index] = image;
-        if (currentFrame === index) drawFrame(index);
+        if (pending.get(index) !== job) return;
+        pending.delete(index);
+        if (enabled() && wanted.indexOf(index) !== -1 && image.naturalWidth) {
+          trimForInsert();
+          var buffer = doc.createElement("canvas");
+          buffer.width = bufferWidth;
+          buffer.height = bufferHeight;
+          var target = buffer.getContext("2d", { alpha: false });
+          if (target) {
+            var scale = Math.max(bufferWidth / image.naturalWidth, bufferHeight / image.naturalHeight);
+            var width = image.naturalWidth * scale, height = image.naturalHeight * scale;
+            target.drawImage(image, (bufferWidth - width) / 2, (bufferHeight - height) / 2, width, height);
+            cache.set(index, { canvas: buffer });
+            schedulePaint();
+          } else { buffer.width = buffer.height = 0; }
+        }
+        image.onload = image.onerror = null;
+        image.removeAttribute("src");
+        pump();
       };
-
       image.onerror = function () {
-        frames[index] = null;
+        if (pending.get(index) !== job) return;
+        pending.delete(index);
+        failed.set(index, Date.now() + 30000);
+        image.onload = image.onerror = null;
+        image.removeAttribute("src");
+        pump();
       };
-
       image.src = urls[index];
     }
-
-    function nearestLoadedFrame(index) {
-      if (frames[index]) return frames[index];
-
-      for (var distance = 1; distance < total; distance += 1) {
-        if (frames[index - distance]) return frames[index - distance];
-        if (frames[index + distance]) return frames[index + distance];
-      }
-
-      return null;
-    }
-
     function drawFrame(index) {
-      index = normalizeFrame(index);
-      currentFrame = index;
-
-      if (frames[index] === undefined) loadFrame(index);
-
-      var image = frames[index] || nearestLoadedFrame(index);
-      if (!image || !image.naturalWidth || image === drawnImage) return;
-      drawnImage = image;
-
-      var canvasWidth = canvas.width;
-      var canvasHeight = canvas.height;
-      var scale = Math.max(
-        canvasWidth / image.naturalWidth,
-        canvasHeight / image.naturalHeight,
-      );
-      var imageWidth = image.naturalWidth * scale;
-      var imageHeight = image.naturalHeight * scale;
-
-      context.clearRect(0, 0, canvasWidth, canvasHeight);
-      context.drawImage(
-        image,
-        (canvasWidth - imageWidth) / 2,
-        (canvasHeight - imageHeight) / 2,
-        imageWidth,
-        imageHeight,
-      );
+      currentFrame = normalizeFrame(index);
+      if (!enabled()) return;
+      wanted = [currentFrame];
+      // Current frame first, then a small window around it. Never preload the sequence.
+      for (var distance = 1; wanted.length < cacheLimit && distance < total; distance++) {
+        var ahead = currentFrame + distance * step;
+        var behind = currentFrame - distance * step;
+        if (ahead < total) wanted.push(ahead);
+        if (wanted.length < cacheLimit && behind >= 0) wanted.push(behind);
+      }
+      queue = wanted.filter(function (frame) { return !cache.has(frame) && !pending.has(frame); });
+      schedulePaint();
+      pump();
     }
-
     function resizeCanvas() {
       var rect = canvas.getBoundingClientRect();
       var nextWidth = Math.max(1, Math.round(rect.width || win.innerWidth));
       var nextHeight = Math.max(1, Math.round(rect.height || win.innerHeight));
-
-      if (nextWidth === cssWidth && nextHeight === cssHeight) return;
-
-      cssWidth = nextWidth;
-      cssHeight = nextHeight;
-
-      var dpr = Math.min(win.devicePixelRatio || 1, isMobileLike ? 1.25 : 2);
-      drawnImage = null;
-      canvas.width = Math.round(nextWidth * dpr);
-      canvas.height = Math.round(nextHeight * dpr);
-
+      var dpr = Math.min(win.devicePixelRatio || 1, isMobileLike ? 1.25 : 1.5);
+      if (nextWidth === cssWidth && nextHeight === cssHeight && dpr === pixelRatio) return;
+      cssWidth = nextWidth; cssHeight = nextHeight; pixelRatio = dpr;
+      var scale = Math.min(dpr, Math.sqrt(maxPixels / (nextWidth * nextHeight)));
+      bufferWidth = Math.max(1, Math.floor(nextWidth * scale));
+      bufferHeight = Math.max(1, Math.floor(nextHeight * scale));
+      cancelPending();
+      clearCache();
+      canvas.width = bufferWidth;
+      canvas.height = bufferHeight;
       drawFrame(currentFrame);
     }
-
+    function suspend() {
+      cancelPending();
+      clearCache();
+      if (paintFrame) win.cancelAnimationFrame(paintFrame);
+      paintFrame = 0;
+      // Keep the one visible canvas bitmap, preventing a blank flash on return.
+    }
     resizeCanvas();
-
     if ("ResizeObserver" in win) {
-      var observer = new ResizeObserver(resizeCanvas);
-      observer.observe(canvas);
-      state.cleanups.push(function () {
-        observer.disconnect();
-      });
-    } else {
-      listen(win, "resize", resizeCanvas, { passive: true });
+      var resizeObserver = new ResizeObserver(resizeCanvas);
+      resizeObserver.observe(canvas);
+      state.cleanups.push(function () { resizeObserver.disconnect(); });
+    } else { onResizeSettled(resizeCanvas); }
+    if ("IntersectionObserver" in win) {
+      var visibilityObserver = new IntersectionObserver(function (entries) {
+        nearViewport = entries[0].isIntersecting;
+        if (nearViewport) drawFrame(currentFrame); else suspend();
+      }, { rootMargin: "25% 0px" });
+      visibilityObserver.observe(section);
+      state.cleanups.push(function () { visibilityObserver.disconnect(); });
     }
-
-    loadFrame(0);
-    if (!reduced) loadFrame(total - 1);
-
-    var idle =
-      win.requestIdleCallback ||
-      function (callback) {
-        return win.setTimeout(callback, 80);
-      };
-
-    var preloadQueue = [];
-    var preloadIndex = 0;
-    var batchSize = isMobileLike ? 4 : 10;
-
-    for (var frameIndex = step; frameIndex < total - 1; frameIndex += step) {
-      preloadQueue.push(frameIndex);
+    listen(doc, "visibilitychange", function () {
+      if (doc.hidden) suspend(); else drawFrame(currentFrame);
+    });
+    listen(win, "pagehide", suspend);
+    listen(win, "pageshow", function () { drawFrame(currentFrame); });
+    function stats() {
+      var bytes = 0;
+      cache.forEach(function (entry) { bytes += entry.canvas.width * entry.canvas.height * 4; });
+      return { cachedFrames: cache.size, frameLimit: cacheLimit, inFlight: pending.size,
+        concurrency: concurrency, cachedPixelBytes: bytes,
+        displayPixelBytes: canvas.width * canvas.height * 4, maxPixels: maxPixels,
+        currentFrame: currentFrame, displayedFrame: lastDrawn, active: enabled() };
     }
-
-    function fillPreloadQueue() {
-      if (heroDisposed) return;
-      preloadQueue
-        .slice(preloadIndex, preloadIndex + batchSize)
-        .forEach(loadFrame);
-      preloadIndex += batchSize;
-
-      if (preloadIndex < preloadQueue.length) {
-        idleHandle = idle(fillPreloadQueue, { timeout: 350 });
-      }
+    if (cfg.debug === true) {
+      win.CLT_HOME_DEBUG = win.CLT_HOME_DEBUG || {};
+      win.CLT_HOME_DEBUG.hero = stats;
     }
-
-    if (!reduced) fillPreloadQueue();
+    state.cleanups.push(function () {
+      disposed = true;
+      suspend();
+      canvas.width = canvas.height = 1;
+      if (win.CLT_HOME_DEBUG && win.CLT_HOME_DEBUG.hero === stats) delete win.CLT_HOME_DEBUG.hero;
+    });
 
     var lines = queryAll(SELECTOR.heroLine, section);
     var cue = query(SELECTOR.heroCue, section);
 
-    if (reduced) {
+    if (staticFrame) {
       drawFrame(0);
       gsap.set(lines, { autoAlpha: 1, y: 0 });
       if (cue) gsap.set(cue, { autoAlpha: 0 });
@@ -782,6 +824,34 @@ window.CLT_HERO_FRAMES = [
     });
   }
 
+  // On touch devices, one browser-owned scroll surface: no clones, transforms,
+  // custom inertia, pointer capture, or window-level move listeners.
+  function initNativeRail(viewport, track, label) {
+    viewport.classList.add("clt-home-native-scroll");
+    track.classList.add("clt-home-native-track");
+    Object.assign(viewport.style, {
+      overflowX: "auto", overflowY: "hidden", touchAction: "auto",
+      transform: "none", maskImage: "none", webkitMaskImage: "none"
+    });
+    Object.assign(track.style, {
+      display: "flex", flexWrap: "nowrap", width: "max-content",
+      transform: "none", translate: "none", touchAction: "auto",
+      willChange: "auto", transition: "none"
+    });
+    queryAll('[data-clone="true"]', track).forEach(function (clone) { clone.remove(); });
+    delete track.dataset.clonesReady;
+    if (!viewport.hasAttribute("tabindex")) viewport.tabIndex = 0;
+    if (!viewport.hasAttribute("role")) viewport.setAttribute("role", "region");
+    if (!viewport.hasAttribute("aria-label") && !viewport.hasAttribute("aria-labelledby")) {
+      viewport.setAttribute("aria-label", label);
+    }
+    queryAll("img", track).forEach(function (image) {
+      image.decoding = "async";
+      if (!image.hasAttribute("loading")) image.loading = "lazy";
+      image.draggable = false;
+    });
+  }
+
   function initPosterArchive() {
     var gsap = state.gsap;
     var ScrollTrigger = state.ScrollTrigger;
@@ -793,6 +863,7 @@ window.CLT_HERO_FRAMES = [
 
     var reduced = state.reduced;
     var isTouch = win.matchMedia("(hover: none), (pointer: coarse)").matches;
+    if (isTouch) { initNativeRail(viewport, track, "Poster archive"); return; }
     var originals = queryAll(SELECTOR.pastItem, track).filter(function (item) {
       return item.dataset.clone !== "true";
     });
@@ -1035,6 +1106,8 @@ window.CLT_HERO_FRAMES = [
 
     var reduced = state.reduced;
     var isTouch = win.matchMedia("(hover: none), (pointer: coarse)").matches;
+    if (isTouch) { initNativeRail(mask, track, "Explore"); return; }
+    mask.style.overflow = "hidden";
 
     var originals = queryAll(SELECTOR.exploreCard, track).filter(
       function (card) {
@@ -1050,10 +1123,11 @@ window.CLT_HERO_FRAMES = [
         clone.dataset.clone = "true";
         clone.setAttribute("aria-hidden", "true");
         prepareLoopClone(clone);
-        // Eager-load cloned imagery so the looped half never flashes blank.
+        // Let browser proximity decide when duplicate imagery needs decoding.
         var cloneImgs = clone.querySelectorAll("img");
         for (var ci = 0; ci < cloneImgs.length; ci++) {
-          cloneImgs[ci].setAttribute("loading", "eager");
+          cloneImgs[ci].setAttribute("loading", "lazy");
+          cloneImgs[ci].setAttribute("decoding", "async");
         }
         track.appendChild(clone);
       });
@@ -1287,7 +1361,7 @@ window.CLT_HERO_FRAMES = [
         scaleY: 0.95,
         filter: "brightness(0.7) saturate(0.82)",
         transformOrigin: "50% 50%",
-        force3D: true,
+        force3D: "auto",
       });
 
       gsap.set(image, {
@@ -1295,19 +1369,19 @@ window.CLT_HERO_FRAMES = [
         scaleY: 1.02,
         filter: "saturate(0.98) contrast(1)",
         transformOrigin: "50% 50%",
-        force3D: true,
+        force3D: "auto",
       });
 
       gsap.set(staticLayer, {
         y: 0,
         autoAlpha: 1,
-        force3D: true,
+        force3D: "auto",
       });
 
       gsap.set(overlay, {
         autoAlpha: 0,
         y: 18,
-        force3D: true,
+        force3D: "auto",
       });
 
       gsap.set(overlayInner, {
@@ -1316,13 +1390,13 @@ window.CLT_HERO_FRAMES = [
         scaleX: 0.965,
         scaleY: 0.965,
         transformOrigin: "50% 100%",
-        force3D: true,
+        force3D: "auto",
       });
 
       gsap.set(overlayItems, {
         autoAlpha: 0,
         y: 8,
-        force3D: true,
+        force3D: "auto",
       });
 
       var timeline = gsap.timeline({
