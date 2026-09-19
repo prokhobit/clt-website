@@ -256,7 +256,7 @@ window.CLT_HERO_FRAMES = [
     return;
   }
   win.__cltHomeLoaded = true;
-  win.CLT_HOME_VERSION = "2026-09-19-native-rails-bounded-cache";
+  win.CLT_HOME_VERSION = "2026-09-19-poster-rail-pause-hover";
 
   var SELECTOR = {
     heroSection: ".home-hero",
@@ -271,7 +271,7 @@ window.CLT_HERO_FRAMES = [
     pastViewport: ".clt-poster-rail",
     pastTrack: "[data-home-past]",
     pastItem: ".clt-poster-rail__item",
-    pastPoster: "clt-poster-rail__art .clt-poster",
+    pastPoster: ".clt-poster-rail__art .clt-poster",
 
     exploreSection: ".clt-home-explore",
     exploreMask: ".clt-home-explore.is-track-mask",
@@ -295,7 +295,7 @@ window.CLT_HERO_FRAMES = [
       ".home-zoom__overlay .clt-eyebrow, .home-zoom__overlay-title, .home-zoom__overlay-copy, .home-zoom__overlay .clt-button",
 
     reveal:
-      ".home-marquee[data-reveal], .clt-home-explore.is-header[data-reveal], .home-section__head[data-reveal], .clt-panel[data-reveal], .home-past__item[data-reveal]",
+      ".home-marquee[data-reveal], .clt-home-explore.is-header[data-reveal], .home-section__head[data-reveal], .clt-panel[data-reveal], .clt-poster-rail__item[data-reveal]",
   };
 
   var state = {
@@ -852,6 +852,135 @@ window.CLT_HERO_FRAMES = [
     });
   }
 
+  // Animate scrollLeft only while idle. Touch gestures and their momentum remain
+  // entirely browser-owned; wrapping is deferred until native scrolling settles.
+  function initNativeAutoScroll(viewport, track) {
+    var motion = win.matchMedia("(prefers-reduced-motion: reduce)");
+    var originals = Array.prototype.slice.call(track.children);
+    if (motion.matches || originals.length < 2) return;
+    var clones = originals.map(function (item) {
+      var clone = item.cloneNode(true);
+      clone.dataset.clone = "true";
+      clone.setAttribute("aria-hidden", "true");
+      prepareLoopClone(clone);
+      queryAll("img", clone).forEach(function (img) { img.loading = "lazy"; img.decoding = "async"; });
+      track.appendChild(clone);
+      return clone;
+    });
+    var button = doc.createElement("button");
+    button.type = "button";
+    button.className = "clt-home-auto-toggle";
+    button.textContent = "Pause auto-scroll";
+    button.setAttribute("aria-label", "Pause Explore automatic scrolling");
+    button.setAttribute("aria-pressed", "false");
+    viewport.insertAdjacentElement("afterend", button);
+    var pitch = 0, frame = 0, timer = 0, previous = null, position = viewport.scrollLeft;
+    var written = null, touching = false, mouseDown = false, focused = false;
+    var paused = false, visible = false, away = false, destroyed = false;
+    var resumeAt = performance.now() + 1200;
+    var configuredSpeed = Number((win.CLT_HOME_CONFIG || {}).exploreAutoSpeed);
+    var speed = Number.isFinite(configuredSpeed) && configuredSpeed > 0
+      ? Math.max(8, Math.min(50, configuredSpeed)) : 24;
+    function stop() {
+      if (frame) win.cancelAnimationFrame(frame);
+      win.clearTimeout(timer);
+      frame = timer = 0;
+      previous = null;
+    }
+    function allowed() {
+      return !destroyed && !paused && !motion.matches && visible && !away && !doc.hidden &&
+        !touching && !mouseDown && !focused && pitch > 0 &&
+        viewport.scrollWidth - viewport.clientWidth >= pitch;
+    }
+    function write(value) {
+      viewport.scrollLeft = value;
+      written = viewport.scrollLeft;
+    }
+    function tick(now) {
+      frame = 0;
+      if (!allowed()) { stop(); return; }
+      var dt = previous === null ? 0 : Math.min(0.05, (now - previous) / 1000);
+      previous = now;
+      position = (position + speed * dt) % pitch;
+      write(position);
+      frame = win.requestAnimationFrame(tick);
+    }
+    function sync() {
+      stop();
+      if (!allowed()) return;
+      var wait = resumeAt - performance.now();
+      if (wait > 0) { timer = win.setTimeout(sync, wait + 1); return; }
+      position = ((viewport.scrollLeft % pitch) + pitch) % pitch;
+      write(position);
+      frame = win.requestAnimationFrame(tick);
+    }
+    function interaction() { resumeAt = performance.now() + 3000; sync(); }
+    function measure() {
+      pitch = clones[0].offsetLeft - originals[0].offsetLeft;
+      button.hidden = !(pitch > 0 && viewport.scrollWidth - viewport.clientWidth >= pitch);
+      interaction();
+    }
+    listen(viewport, "touchstart", function () { touching = true; interaction(); }, { passive: true });
+    function endTouch(event) { touching = event.touches.length > 0; interaction(); }
+    listen(win, "touchend", endTouch, { passive: true });
+    listen(win, "touchcancel", endTouch, { passive: true });
+    listen(viewport, "pointerdown", function (event) {
+      if (event.pointerType === "touch") return;
+      mouseDown = true; interaction();
+    }, { passive: true });
+    function endPointer(event) {
+      if (event.pointerType === "touch") return;
+      mouseDown = false; interaction();
+    }
+    listen(win, "pointerup", endPointer, { passive: true });
+    listen(win, "pointercancel", endPointer, { passive: true });
+    listen(viewport, "wheel", interaction, { passive: true });
+    listen(viewport, "focusin", function () { focused = true; interaction(); });
+    listen(viewport, "focusout", function (event) {
+      focused = Boolean(event.relatedTarget && viewport.contains(event.relatedTarget));
+      interaction();
+    });
+    listen(viewport, "scroll", function () {
+      if (written !== null && Math.abs(viewport.scrollLeft - written) < 0.5) return;
+      written = null;
+      interaction();
+    }, { passive: true });
+    listen(button, "click", function () {
+      paused = !paused;
+      button.textContent = paused ? "Resume auto-scroll" : "Pause auto-scroll";
+      button.setAttribute("aria-label", (paused ? "Resume" : "Pause") + " Explore automatic scrolling");
+      button.setAttribute("aria-pressed", String(paused));
+      resumeAt = performance.now();
+      sync();
+    });
+    listen(doc, "visibilitychange", interaction);
+    listen(win, "blur", function () { touching = mouseDown = false; interaction(); });
+    listen(win, "pagehide", function () { away = true; stop(); });
+    listen(win, "pageshow", function () { away = false; interaction(); });
+    if (motion.addEventListener) listen(motion, "change", sync);
+    if ("IntersectionObserver" in win) {
+      var observer = new IntersectionObserver(function (entries) {
+        visible = entries[0].isIntersecting;
+        sync();
+      });
+      observer.observe(viewport);
+      state.cleanups.push(function () { observer.disconnect(); });
+    } else { visible = true; }
+    if ("ResizeObserver" in win) {
+      var resizeObserver = new ResizeObserver(measure);
+      resizeObserver.observe(viewport);
+      resizeObserver.observe(track);
+      state.cleanups.push(function () { resizeObserver.disconnect(); });
+    } else { onResizeSettled(measure); }
+    measure();
+    state.cleanups.push(function () {
+      destroyed = true;
+      stop();
+      clones.forEach(function (clone) { clone.remove(); });
+      button.remove();
+    });
+  }
+
   function initPosterArchive() {
     var gsap = state.gsap;
     var ScrollTrigger = state.ScrollTrigger;
@@ -881,12 +1010,11 @@ window.CLT_HERO_FRAMES = [
       track.dataset.clonesReady = "true";
     }
 
-    var items = queryAll(SELECTOR.pastItem, track);
-    var posters = queryAll(SELECTOR.pastPoster, track);
     var setWidth = 1;
     var velocity = 0;
     var dragging = false;
     var paused = false;
+    var hovered = false, focused = false, resumeFactor = 0;
     var active = true;
     var momentumTween = null;
     var previousScroll = getScrollPosition();
@@ -905,11 +1033,6 @@ window.CLT_HERO_FRAMES = [
       force3D: true,
     });
 
-    gsap.set(posters, {
-      transformOrigin: "50% 50%",
-      force3D: true,
-    });
-
     var writeTrackX = gsap.quickSetter(track, "x", "px");
     function setTrackX(value) {
       writeTrackX(wrapNegativeX(value, setWidth));
@@ -925,8 +1048,10 @@ window.CLT_HERO_FRAMES = [
       return dragging;
     }
 
-    function setPaused(value) {
-      paused = value;
+    function setPaused() {
+      paused = hovered || focused;
+      resumeFactor = 0;
+      if (paused && momentumTween) { momentumTween.kill(); momentumTween = null; velocity = 0; }
       viewport.classList.toggle("is-paused", paused || dragging);
       previousScroll = getScrollPosition();
     }
@@ -938,7 +1063,7 @@ window.CLT_HERO_FRAMES = [
       var proxy = { progress: 0 };
 
       if (momentumTween) momentumTween.kill();
-      if (reduced || Math.abs(velocity) < 35) return;
+      if (paused || reduced || Math.abs(velocity) < 35) return;
 
       momentumTween = gsap.to(proxy, {
         progress: 1,
@@ -1003,63 +1128,29 @@ window.CLT_HERO_FRAMES = [
 
     listen(viewport, "pointerenter", function (event) {
       if (event.pointerType !== "mouse") return;
-      setPaused(true);
+      hovered = true;
+      setPaused();
     });
 
     listen(viewport, "pointerleave", function (event) {
       if (event.pointerType !== "mouse") return;
-      setPaused(false);
+      hovered = false;
+      setPaused();
     });
 
     listen(viewport, "focusin", function () {
-      setPaused(true);
+      focused = true;
+      setPaused();
     });
-
-    listen(viewport, "focusout", function () {
-      setPaused(false);
+    listen(viewport, "focusout", function (event) {
+      focused = Boolean(event.relatedTarget && viewport.contains(event.relatedTarget));
+      setPaused();
     });
 
     initPointerDragFallback(viewport, track, null, setTrackX, isDragging,
       function (nextVelocity) { velocity = nextVelocity; },
       releaseMomentum, pressStart, pressEnd);
     state.cleanups.push(function () { if (momentumTween) momentumTween.kill(); });
-
-    items.forEach(function (item) {
-      if (isTouch || reduced) return;
-      var poster = query(".clt-poster", item);
-      if (!poster) return;
-
-      var hover = gsap.timeline({
-        paused: true,
-        defaults: { ease: "power3.out", overwrite: "auto" },
-      });
-
-      hover
-        .to(
-          item,
-          {
-            duration: reduced ? 0.01 : 0.34,
-          },
-          0,
-        )
-        .to(
-          poster,
-          {
-            duration: reduced ? 0.01 : 0.56,
-            ease: "power2.out",
-          },
-          0,
-        );
-
-      listen(item, "pointerenter", function () {
-        if (isDragging()) return;
-        hover.timeScale(1).play();
-      });
-
-      listen(item, "pointerleave", function () {
-        hover.timeScale(1.35).reverse();
-      });
-    });
 
     if (reduced) return;
 
@@ -1082,8 +1173,10 @@ window.CLT_HERO_FRAMES = [
       previousScroll = scroll;
 
       var currentX = Number(gsap.getProperty(track, "x")) || 0;
-      var autoStep = -30 * deltaSeconds;
-      var scrollPush = clamp(-22, 22, scrollDelta * -0.24);
+      // Ease back to full speed over a few frames without moving on hover.
+      resumeFactor += (1 - resumeFactor) * (1 - Math.exp(-deltaSeconds / 0.16));
+      var autoStep = -30 * deltaSeconds * resumeFactor;
+      var scrollPush = clamp(-22, 22, scrollDelta * -0.24) * resumeFactor;
       setTrackX(currentX + autoStep + scrollPush);
 
     });
@@ -1101,7 +1194,11 @@ window.CLT_HERO_FRAMES = [
 
     var reduced = state.reduced;
     var isTouch = win.matchMedia("(hover: none), (pointer: coarse)").matches;
-    if (isTouch) { initNativeRail(mask, track, "Explore"); return; }
+    if (isTouch) {
+      initNativeRail(mask, track, "Explore");
+      initNativeAutoScroll(mask, track);
+      return;
+    }
     mask.style.overflow = "hidden";
 
     var originals = queryAll(SELECTOR.exploreCard, track).filter(
