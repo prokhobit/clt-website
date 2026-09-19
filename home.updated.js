@@ -268,10 +268,10 @@ window.CLT_HERO_FRAMES = [
     marqueeRoot: ".home-marquee .clt-marquee",
     marqueeTrack: ".clt-marquee__track",
 
-    pastViewport: ".home-past__viewport",
+    pastViewport: ".clt-poster-rail",
     pastTrack: "[data-home-past]",
-    pastItem: ".home-past__item",
-    pastPoster: ".home-past__item .clt-poster",
+    pastItem: ".clt-poster-rail__item",
+    pastPoster: "clt-poster-rail__art .clt-poster",
 
     exploreSection: ".clt-home-explore",
     exploreMask: ".clt-home-explore.is-track-mask",
