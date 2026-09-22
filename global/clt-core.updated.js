@@ -1370,6 +1370,250 @@
     });
   }
 
+  // ── Jump-nav (.clt-jumpnav) — scroll-spy + docking ────────────────────────
+  // Spy: lights the link whose section is under the reading line (38% down
+  // the viewport). At the very bottom of the page the last link wins, so a
+  // short closing section can still light. A click lights its link at once
+  // and the spy stays out of the way until that scroll settles, so the pill
+  // doesn't flick through every section in between.
+  // Dock: once the nav scrolls up under the site navbar it pins there
+  // (.is-docked) and follows the reader down the page — always beneath the
+  // Glass Nav (see dockOffset); a spacer holds its
+  // old place so nothing below jumps. It is moved to <body> while docked,
+  // because position:fixed inside a transformed ancestor (reveals, parallax)
+  // would pin to that ancestor instead of the viewport.
+  // Opt out: data-clt-jumpnav="static" (no spy, no dock) or
+  // data-clt-jumpnav-dock="off" (spy only). data-clt-jumpnav-offset="<px>"
+  // overrides the gap measured under the navbar.
+  function initJumpNav(root) {
+    $all(".clt-jumpnav", root || document).forEach(function (nav) {
+      if (nav.__cltJumpNav || nav.getAttribute("data-clt-jumpnav") === "static") return;
+      var items = [];
+      $all('a[href^="#"]', nav).forEach(function (link) {
+        var id = link.getAttribute("href").slice(1);
+        var target = null;
+        try { target = id && document.getElementById(decodeURIComponent(id)); } catch (e) {}
+        if (target) items.push({ link: link, target: target });
+      });
+      if (!items.length) return;
+      nav.__cltJumpNav = true;
+
+      var current = -1;
+      function revealCurrent() {
+        if (current < 0 || nav.scrollWidth <= nav.clientWidth + 1) return;
+        var nr = nav.getBoundingClientRect();
+        var lr = items[current].link.getBoundingClientRect();
+        nav.scrollTo({
+          left: nav.scrollLeft + (lr.left - nr.left) - (nav.clientWidth - lr.width) / 2,
+          behavior: env.reducedMotion ? "auto" : "smooth",
+        });
+      }
+      function setCurrent(idx) {
+        if (idx === current) return;
+        current = idx;
+        items.forEach(function (it, i) {
+          it.link.classList.toggle("is-current", i === idx);
+          if (i === idx) it.link.setAttribute("aria-current", "true");
+          else it.link.removeAttribute("aria-current");
+        });
+        revealCurrent(); // the pill scrolls sideways when it overflows
+      }
+
+      function spy() {
+        var vh = window.innerHeight;
+        var doc = document.documentElement;
+        var y = window.scrollY || window.pageYOffset || 0;
+        if (y > 0 && y + vh >= doc.scrollHeight - 2) return setCurrent(items.length - 1);
+        var line = vh * 0.38, idx = 0, best = -Infinity;
+        items.forEach(function (it, i) {
+          var top = it.target.getBoundingClientRect().top;
+          if (top <= line && top > best) { best = top; idx = i; }
+        });
+        setCurrent(idx);
+      }
+
+      // ── docking
+      var canDock = nav.getAttribute("data-clt-jumpnav-dock") !== "off";
+      var docked = false, spacer = null, home = null, homeNext = null;
+      function dockOffset() {
+        var fixed = parseFloat(nav.getAttribute("data-clt-jumpnav-offset"));
+        if (!isNaN(fixed)) return fixed;
+        // The site's Glass Nav (Webflow shared-footer component, shadow DOM)
+        // publishes its clearance on <html> as --clt-nav-offset: bar + current-
+        // page strip + 16px on desktop, just 16px below 1024px where the bar
+        // moves to the bottom of the screen. Read the inline value first — it
+        // costs no style recalc on every scroll frame.
+        var root = document.documentElement;
+        var navOffset = parseFloat(
+          root.style.getPropertyValue("--clt-nav-offset") ||
+          getComputedStyle(root).getPropertyValue("--clt-nav-offset")
+        );
+        if (!isNaN(navOffset)) return navOffset;
+        // Fallback: a design-system .clt-navbar stuck to the top.
+        var bottom = 0;
+        $all(".clt-navbar-shell, .clt-navbar").forEach(function (bar) {
+          var pos = getComputedStyle(bar).position;
+          if (pos !== "fixed" && pos !== "sticky") return;
+          var r = bar.getBoundingClientRect();
+          if (r.top <= 1 && r.bottom > bottom) bottom = r.bottom;
+        });
+        return bottom + 10;
+      }
+      function dock(on, offset) {
+        if (on === docked) return;
+        docked = on;
+        if (on) {
+          var cs = getComputedStyle(nav);
+          spacer = spacer || document.createElement("div");
+          spacer.className = "clt-jumpnav-spacer";
+          spacer.setAttribute("aria-hidden", "true");
+          spacer.style.height = nav.offsetHeight + "px";
+          spacer.style.marginTop = cs.marginTop;
+          spacer.style.marginBottom = cs.marginBottom;
+          home = nav.parentNode;
+          homeNext = nav.nextSibling;
+          home.insertBefore(spacer, nav);
+          nav.style.setProperty("--clt-jumpnav-top", offset + "px");
+          document.body.appendChild(nav);
+          nav.classList.add("is-docked");
+        } else {
+          nav.classList.remove("is-docked");
+          nav.style.removeProperty("--clt-jumpnav-top");
+          if (home) home.insertBefore(nav, spacer && spacer.parentNode === home ? spacer : homeNext);
+          if (spacer && spacer.parentNode) spacer.parentNode.removeChild(spacer);
+        }
+        revealCurrent();
+      }
+      function checkDock() {
+        if (!canDock) return;
+        var offset = dockOffset();
+        var anchor = docked ? spacer : nav;
+        var shouldDock = anchor.getBoundingClientRect().top < offset;
+        if (docked && shouldDock) nav.style.setProperty("--clt-jumpnav-top", offset + "px");
+        dock(shouldDock, offset);
+      }
+
+      // Jump targets clear the docked nav as well as the Glass Nav: the
+      // html scroll-padding covers the Glass Nav, scroll-margin (honoured by
+      // native anchors and Lenis alike) adds the docked row plus a 12px gap.
+      // Measured as one row of links — the docked form — even while the nav
+      // is still wrapped over two rows in the hero.
+      function setClearance() {
+        if (!canDock) return;
+        var cs = getComputedStyle(nav);
+        var row = items[0].link.offsetHeight +
+          parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) +
+          parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+        items.forEach(function (it) { it.target.style.scrollMarginTop = Math.ceil(row + 12) + "px"; });
+      }
+
+      // Click lock — released 160ms after the last scroll event of the jump.
+      var locked = false, unlockTimer = 0;
+      function relock() {
+        clearTimeout(unlockTimer);
+        unlockTimer = setTimeout(function () { locked = false; spy(); }, 160);
+      }
+      items.forEach(function (it, i) {
+        it.link.addEventListener("click", function () {
+          setCurrent(i);
+          locked = true;
+          relock();
+        });
+      });
+
+      var ticking = false;
+      function frame() {
+        ticking = false;
+        checkDock();
+        if (!locked) spy();
+      }
+      function onScroll() {
+        if (locked) relock();
+        if (ticking) return;
+        ticking = true;
+        window.requestAnimationFrame(frame);
+      }
+      function onResize() {
+        if (docked) { dock(false); }
+        setClearance();
+        frame();
+      }
+      setClearance();
+      frame();
+      window.addEventListener("scroll", onScroll, { passive: true });
+      window.addEventListener("resize", debounce(onResize, 150));
+      document.addEventListener("clt:refresh", onResize);
+    });
+  }
+
+  // ── Button arrow → treble clef (.clt-button__arrow) ────────────────────────
+  // Upgrades a plain "→" arrow to an inline SVG carrying both strokes. With
+  // GSAP MorphSVGPlugin loaded the arrow morphs into the clef on hover/focus
+  // and back on leave; without it, clt-master.css un-draws the arrow and pens
+  // the clef in. The arrow path retraces its shaft so it is one subpath, like
+  // the clef — that is what keeps the morph clean. Opt out with
+  // data-clt-clef="off" on the button or any ancestor.
+  var CLEF_ARROW_D = "M13.5 6.5L19 12L4 12L19 12L13.5 17.5";
+  var CLEF_D =
+    "M12.9 15.4C12.2 15.6 11.3 15.1 11.4 14.2C11.5 13.2 12.5 12.6 13.5 12.8" +
+    "C14.7 13 15.4 14.1 15.3 15.3C15.2 16.9 13.9 18.2 12.1 18.2" +
+    "C9.9 18.2 8.3 16.6 8.4 14.6C8.5 12.4 10.2 10.9 12 9.4" +
+    "C13.8 7.9 15.1 6.3 14.9 4.2C14.8 2.8 14.1 1.7 13.4 1.7" +
+    "C12.4 1.7 11.7 3.3 11.7 5.3C11.7 7.6 12.4 11 13 14.6L13.4 20.3" +
+    "C13.5 21.9 12.8 22.8 11.7 22.8C10.8 22.8 10.2 22.2 10.3 21.5";
+
+  function initButtonClef(root) {
+    var gsap = window.gsap;
+    var Morph = window.MorphSVGPlugin;
+    var canMorph = !!(gsap && Morph) && !env.reducedMotion;
+    if (canMorph) gsap.registerPlugin(Morph);
+    var NS = "http://www.w3.org/2000/svg";
+
+    function makePath(d, cls) {
+      var p = document.createElementNS(NS, "path");
+      p.setAttribute("d", d);
+      p.setAttribute("class", cls);
+      p.setAttribute("pathLength", "1");
+      return p;
+    }
+
+    $all(".clt-button__arrow", root || document).forEach(function (el) {
+      if (el.classList.contains("is-clef")) return;
+      var btn = el.closest(".clt-button");
+      if (!btn || btn.closest('[data-clt-clef="off"]')) return;
+      if (el.children.length || el.textContent.trim() !== "→") return;
+
+      var svg = document.createElementNS(NS, "svg");
+      svg.setAttribute("viewBox", "0 0 24 24");
+      svg.setAttribute("aria-hidden", "true");
+      svg.setAttribute("focusable", "false");
+      var arrow = makePath(CLEF_ARROW_D, "clt-clef__arrow");
+      arrow.setAttribute("stroke-width", "2.1"); // explicit, so the morph tweens from it
+      var clef = makePath(CLEF_D, "clt-clef__clef");
+      svg.appendChild(arrow);
+      svg.appendChild(clef);
+      el.textContent = "";
+      el.appendChild(svg);
+      el.classList.add("is-clef");
+
+      if (!canMorph) return; // CSS draw-swap fallback handles it
+      el.classList.add("is-morph");
+      var tween = gsap.to(arrow, {
+        morphSVG: { shape: clef, type: "rotational" },
+        attr: { "stroke-width": 1.7 },
+        duration: 0.6,
+        ease: "power2.inOut",
+        paused: true,
+      });
+      var play = function () { tween.timeScale(1).play(); };
+      var back = function () { tween.timeScale(1.25).reverse(); };
+      btn.addEventListener("pointerenter", play);
+      btn.addEventListener("pointerleave", back);
+      btn.addEventListener("focus", play);
+      btn.addEventListener("blur", back);
+    });
+  }
+
   function initAmbientParallax() {
     var layers = $all(".clt-ambient");
     if (!layers.length) return; // base + any Acts buffer
@@ -1887,6 +2131,7 @@
           }
         };
         var strikeOut = function (batch) {
+          batch = batch.filter(function (el) { return !el.closest("[data-clt-keep-lit]"); });
           // light fade + small recede the way it came
           for (var i = 0; i < batch.length; i++) {
             var el = batch[i],
@@ -1970,6 +2215,10 @@
       var isChars = type.indexOf("chars") >= 0;
       var split = null,
         assembled = false,
+        // Inside [data-clt-keep-lit] the text never strikes out on leave —
+        // for copy a page holds on screen with a transform (e.g. a hero
+        // overlay), which a trigger measured on layout would think had gone.
+        keepLit = !!el.closest("[data-clt-keep-lit]"),
         lastW = window.innerWidth;
 
       function units() {
@@ -2048,7 +2297,7 @@
             }
           : undefined,
         onLeave:
-          replay && strike
+          replay && strike && !keepLit
             ? function () {
                 gsap.to(el, {
                   opacity: 0,
@@ -2059,7 +2308,7 @@
               }
             : undefined,
         onLeaveBack:
-          replay && strike
+          replay && strike && !keepLit
             ? function () {
                 gsap.to(el, {
                   opacity: 0,
@@ -2511,6 +2760,8 @@
     initFieldValidation();
     initCardFlip();
     initSectionNav();
+    initJumpNav();
+    initButtonClef();
     initNavbarCondense();
     initAmbient();
     initAmbientParallax();
