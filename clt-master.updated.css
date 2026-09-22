@@ -3197,32 +3197,6 @@ a.clt-card:hover {
 }
 [data-gsap~="clt-tilt"] { transform-style: preserve-3d; }
 
-/* ── Act marker (playbill section numeral) ─────────────────────────────────
-   Oversized outlined Gloock numeral + brass rule + label. One per major
-   section to break the stacked-panel rhythm:
-     <div class="clt-act"><span class="clt-act__numeral">Act II</span>
-     <span class="clt-act__label">The Season</span></div> */
-.clt-act {
-  display: flex; align-items: baseline; gap: 1.25rem;
-  margin-bottom: clamp(1.5rem, 3vw, 2.75rem);
-}
-.clt-act__numeral {
-  font-family: var(--font-display);
-  font-size: clamp(3.5rem, 2rem + 7vw, 8.5rem);
-  line-height: 0.9; letter-spacing: -0.02em;
-  color: color-mix(in srgb, var(--clt-linen-rgb) 16%, transparent);
-  -webkit-text-stroke: 1px color-mix(in srgb, var(--clt-brass-rgb) 45%, transparent);
-}
-.clt-act__label {
-  position: relative; padding-left: 3.5rem;
-  font-family: var(--font-body); font-size: 0.78rem; font-weight: 700;
-  letter-spacing: 0.22em; text-transform: uppercase; color: var(--clt-brass-300);
-}
-.clt-act__label::before {
-  content: ""; position: absolute; left: 0; top: 50%; width: 2.5rem; height: 1px;
-  background: linear-gradient(90deg, var(--clt-brass-300), transparent);
-}
-
 /* Curtain reveal — for splash/hero text */
 .clt-curtain {
   display: inline-block;
