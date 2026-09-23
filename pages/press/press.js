@@ -714,6 +714,7 @@
         // No Draggable means no way to move the row, and a clipped stage with
         // no way to move it is a trap. Hand the scrolling back to the browser.
         stage.classList.remove("is-pinned");
+        mode = null; // nothing bound: clicks and keys stay native
         wall.removeAttribute("data-pr-mode");
         stage.removeAttribute("data-pr-mode");
         return function () {};
@@ -723,6 +724,9 @@
 
       var drag = Draggable.create(track, {
         type: "x",
+        // The track is out of hit-testing (see .pr-track in the page CSS), so
+        // a press in the gap between cards lands on the stage, not on it.
+        trigger: stage,
         bounds: { minX: -travel, maxX: 0 },
         edgeResistance: CONFIG.edgeResistance,
         dragClickables: true,
@@ -840,14 +844,43 @@
        by an arbitrary amount and lands the card somewhere other than the
        middle, and in DECK mode does nothing at all. Either way the job has to
        be finished properly: put the focused card where it belongs. */
+    function indexOfCard(el) {
+      var card = el && el.closest ? el.closest(CARD) : null;
+      if (!card) return -1;
+      for (var i = 0; i < total; i++) {
+        if (cards[i].el === card) return i;
+      }
+      return -1;
+    }
+
     stage.addEventListener("focusin", function (event) {
       poke(); // someone is navigating the wall; stop walking it for them
-      var card =
-        event.target && event.target.closest ? event.target.closest(CARD) : null;
-      if (!card) return;
-      for (var i = 0; i < total; i++) {
-        if (cards[i].el === card) return goToIndex(i);
-      }
+      /* Keyboard focus only. A mouse press focuses the link too, and chasing
+         that focus would start a scroll animation under the very drag the
+         press is about to begin. Clicks are handled below instead. */
+      var target = event.target;
+      try {
+        if (target && target.matches && !target.matches(":focus-visible")) return;
+      } catch (e) {} // very old engines: no :focus-visible, keep the old behaviour
+      var i = indexOfCard(target);
+      if (i > -1) goToIndex(i);
+    });
+
+    /* ── click: centre first, open second ────────────────────────────────────
+       A side card is turned away, shrunk and dimmed, so opening its article
+       from a click is rarely what was meant. The first click brings it to the
+       middle; a click on the centred card opens the article. Keyboard
+       activation (detail 0) always opens — focus has already centred it — and
+       modified clicks (new tab/window) are left to the browser. Draggable still
+       swallows the click that ends a real drag, before this ever sees it. */
+    stage.addEventListener("click", function (event) {
+      if (!mode || event.detail === 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      var i = indexOfCard(event.target);
+      if (i < 0 || i === centred) return;
+      event.preventDefault();
+      poke();
+      goToIndex(i);
     });
 
     // Arrow keys on the region itself, which is the other thing a keyboard
