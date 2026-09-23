@@ -535,7 +535,16 @@
         scrollTrigger: {
           trigger: stage,
           start: "top top",
+          /* Measured HERE, not only from the "refresh" event. That event fires
+             after ScrollTrigger has already computed every end, so a cache
+             filled there is always one refresh stale: whenever the row's
+             width changed (fonts, CSS arriving late, a resize that keeps the
+             padding) the pin ran on the old distance — and from a first
+             measurement of 0 it never pinned at all. ScrollTrigger has
+             un-pinned the stage before it asks, so this reads the real row,
+             and the x function below is evaluated after it. */
           end: function () {
+            measure();
             return "+=" + travel;
           },
           pin: true,

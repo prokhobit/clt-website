@@ -355,8 +355,21 @@
       if (event.persisted) CLT.refresh();
     });
     // Capture late-loading images without observing every DOM mutation.
+    // Only refresh when an image actually moved the layout: sized images
+    // (Webflow writes width/height) load without changing the page height,
+    // and a full ScrollTrigger refresh mid-scroll is a visible hitch.
+    var lastHeight = document.documentElement.scrollHeight;
+    var checkImageLayout = debounce(function () {
+      var h = document.documentElement.scrollHeight;
+      if (h === lastHeight) return;
+      lastHeight = h;
+      CLT.refresh();
+    }, 200);
+    document.addEventListener("clt:refresh", function () {
+      lastHeight = document.documentElement.scrollHeight;
+    });
     document.addEventListener("load", function (event) {
-      if (event.target.tagName === "IMG") CLT.refresh();
+      if (event.target.tagName === "IMG") checkImageLayout();
     }, true);
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(function () { CLT.refresh(); }).catch(function () {});
@@ -1281,12 +1294,22 @@
             ".clt-person-card .bio, .clt-person-card .socials, .clt-person-card .flip-toggle",
           grid,
         );
+        // A second click mid-morph: land the running one first, so the new
+        // measurement starts from a settled layout, not a half-built one.
+        if (grid.__cltFlip) {
+          grid.__cltFlip.progress(1).kill();
+          grid.__cltFlip = null;
+        }
         var state = Flip.getState(targets);
+        var cards = $all(".clt-person-card", grid);
+        // .clt-panel transitions transform/box-shadow in CSS; left on, it
+        // chases every frame Flip writes and the cards lag and snap back.
+        cards.forEach(function (c) { c.style.transition = "none"; });
 
         card.setAttribute("data-expanded", next);
         syncLabel();
 
-        Flip.from(state, {
+        grid.__cltFlip = Flip.from(state, {
           // ease-out + longer to open, ease-in + faster to close (exit < enter)
           duration: expanding ? 0.6 : 0.44,
           ease: expanding ? "power3.out" : "power3.in",
@@ -1313,6 +1336,21 @@
               duration: 0.22,
               ease: "power1.in",
             });
+          },
+          onComplete: function () {
+            var self = grid.__cltFlip;
+            // Transitions back on only after Flip's own cleanup has been
+            // resolved — same tick, and the snap from its last transform to
+            // none becomes a CSS transition of its own.
+            requestAnimationFrame(function () {
+              requestAnimationFrame(function () {
+                if (grid.__cltFlip && grid.__cltFlip !== self) return; // newer flip
+                grid.__cltFlip = null;
+                void grid.offsetWidth;
+                cards.forEach(function (c) { c.style.transition = ""; });
+              });
+            });
+            CLT.refresh(); // card height changed → re-measure triggers below
           },
         });
       });
@@ -1476,6 +1514,14 @@
           nav.style.setProperty("--clt-jumpnav-top", offset + "px");
           document.body.appendChild(nav);
           nav.classList.add("is-docked");
+          // A docked nav is always shown. If a reveal ([data-clt-reveal] on
+          // the nav) hadn't played yet — page reloaded mid-scroll, or opened
+          // on a #section link — its hidden start state would otherwise
+          // follow the nav into the dock and it would never appear.
+          if (window.gsap) {
+            window.gsap.killTweensOf(nav);
+            window.gsap.set(nav, { clearProps: "opacity,visibility,transform,willChange" });
+          }
         } else {
           nav.classList.remove("is-docked");
           nav.style.removeProperty("--clt-jumpnav-top");
@@ -1533,8 +1579,20 @@
         ticking = true;
         window.requestAnimationFrame(frame);
       }
+      // Undock only when the width changed: that is what can re-wrap the nav
+      // and change the height its spacer must hold. Height-only resizes (the
+      // mobile URL bar) and layout refreshes (fonts, lazy images, pinning)
+      // keep it docked — pulling it back into the page and re-docking on
+      // every refresh made it blink.
+      var lastWidth = window.innerWidth;
       function onResize() {
-        if (docked) { dock(false); }
+        var w = window.innerWidth;
+        if (docked && w !== lastWidth) dock(false);
+        lastWidth = w;
+        setClearance();
+        frame();
+      }
+      function onRefresh() {
         setClearance();
         frame();
       }
@@ -1542,7 +1600,7 @@
       frame();
       window.addEventListener("scroll", onScroll, { passive: true });
       window.addEventListener("resize", debounce(onResize, 150));
-      document.addEventListener("clt:refresh", onResize);
+      document.addEventListener("clt:refresh", onRefresh);
     });
   }
 
@@ -2131,11 +2189,16 @@
           }
         };
         var strikeOut = function (batch) {
-          batch = batch.filter(function (el) { return !el.closest("[data-clt-keep-lit]"); });
+          // Never strike a jump-nav: once docked it lives on <body>, pinned
+          // under the navbar, while its trigger is still measured from its
+          // old slot in the hero — so "left the viewport" fires while the
+          // nav is on screen and in use.
+          batch = batch.filter(function (el) {
+            return !el.closest("[data-clt-keep-lit], .clt-jumpnav");
+          });
           // light fade + small recede the way it came
-          for (var i = 0; i < batch.length; i++) {
-            var el = batch[i],
-              v = revealVariant(el);
+          batch.forEach(function (el) {
+            var v = revealVariant(el);
             var to = {
               autoAlpha: 0,
               duration: 0.38,
@@ -2152,7 +2215,7 @@
             else if (v === "curtain") to.yPercent = 40;
             else if (v !== "fade") to.y = "0.6rem";
             gsap.to(el, to);
-          }
+          });
         };
 
         var batchCfg = { start: start, onEnter: assemble, once: !replay };

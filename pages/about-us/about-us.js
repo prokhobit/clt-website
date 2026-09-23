@@ -33,7 +33,8 @@
 
    CONTRACT WITH THE SITE-WIDE CODE
      · Loads AFTER gsap, ScrollTrigger, Flip, Lenis and clt-core.js.
-     · Reads clt-core only through its public surface: CLT.ready, CLT.scrollTo.
+     · Reads clt-core only through its public surface: CLT.ready, CLT.scrollTo,
+       CLT.refresh.
        Nothing is patched or overridden.
      · Uses its own data-au-* hooks, so clt-core's initCardFlip (which binds
        [data-clt-cardflip]) never touches these cards — no double binding.
@@ -97,6 +98,24 @@
     );
   }
 
+  /* The cards are .clt-panel, which transitions transform and box-shadow in
+     CSS. GSAP writes both every frame during the morph and the entrance, and
+     a CSS transition on the same property turns each write into a fresh
+     320ms ease — the cards trail behind Flip, overshoot, then slide back
+     once it lets go. That lag is the "jumpy" open/close. While GSAP owns a
+     card, CSS transitions on it are off. */
+  function ensureMotionCss() {
+    if (document.getElementById("au-motion-css")) return;
+    var style = document.createElement("style");
+    style.id = "au-motion-css";
+    style.textContent =
+      MEMBER + ".is-morphing," +
+      MEMBER + ".is-morphing .au-member__portrait," +
+      MEMBER + ".is-morphing .au-member__close," +
+      MEMBER + ".is-entering{transition:none!important;}";
+    document.head.appendChild(style);
+  }
+
   /* ── The roster ─────────────────────────────────────────────────────────── */
   function initRoster(grid) {
     if (grid.__auRosterReady) return;
@@ -110,10 +129,13 @@
       gsap.registerPlugin(Flip);
       initRoster.__registered = true;
     }
+    ensureMotionCss();
 
     var open = null; // the card currently expanded, or null
     var restingHeight = 0; // the grid's height with nothing open
     var running = []; // animations in flight, so a new click can interrupt them
+    var pendingScroll = null; // the delayed bring-into-view, kept apart: see settle()
+    var morphGen = 0; // bumped per morph, so a late cleanup can't end a newer one
 
     /* Read live every time — that is what lets cards be added later. */
     function cards() {
@@ -124,6 +146,13 @@
        Snap everything in flight to its end before measuring again, so a rapid
        second click always starts from a settled layout. */
     function settle() {
+      /* The pending scroll is killed, never completed: completing a delayed
+         call runs it, and a quick close after an open would then scroll the
+         page to the card that is closing. */
+      if (pendingScroll) {
+        pendingScroll.kill();
+        pendingScroll = null;
+      }
       running.splice(0).forEach(function (anim) {
         try {
           anim.progress(1).kill();
@@ -131,6 +160,25 @@
           try { anim.kill(); } catch (e2) {}
         }
       });
+    }
+
+    /* The first click reveals any card still waiting for its scroll-in
+       entrance. Opening a card re-sorts the grid, so a card parked at
+       opacity 0 further down can move up into view while its entrance
+       trigger still points at where it used to be — it stayed invisible.
+       Flip must also never measure a half-assembled card. */
+    function finishEntrance(list) {
+      if (!gsap) return;
+      var pending = list.filter(function (c) {
+        return c.__auEntrance && !c.__auEntered;
+      });
+      if (!pending.length) return;
+      pending.forEach(function (c) {
+        c.__auEntered = true;
+        c.classList.remove("is-entering");
+      });
+      gsap.killTweensOf(pending);
+      gsap.set(pending, { clearProps: "transform,opacity,visibility,willChange" });
     }
 
     function track(anim) {
@@ -190,9 +238,12 @@
       var ease = expanding ? CONFIG.ease : CONFIG.closeEase;
       var animate = canFlip && !reducedMotion();
 
+      finishEntrance(list);
+
       /* Measure the resting height while the grid is genuinely at rest — i.e.
          only when opening from fully closed, never mid-swap. */
       if (!open) measureResting(list);
+      var heightBefore = grid.getBoundingClientRect().height;
 
       var state = animate
         ? Flip.getState(all(FLIP_PARTS, grid), {
@@ -200,19 +251,25 @@
           })
         : null;
 
+      /* Transitions off BEFORE the classes change, so the border/shadow swap
+         to .is-active is not handed to CSS as well as to Flip. */
+      var gen = ++morphGen;
+      if (animate) {
+        list.forEach(function (c) {
+          c.classList.add("is-morphing");
+        });
+      }
+
       applyState(next, list);
       lockGrid();
 
       if (!animate) {
         if (!next) unlockGrid();
         if (next) bringIntoView(next, 0);
+        refreshIfMoved(heightBefore);
         emit(next);
         return;
       }
-
-      list.forEach(function (c) {
-        c.classList.add("is-morphing");
-      });
 
       track(
         Flip.from(state, {
@@ -237,9 +294,7 @@
             });
           },
           onComplete: function () {
-            list.forEach(function (c) {
-              c.classList.remove("is-morphing");
-            });
+            endMorph(list, gen);
             /* The lock comes off only once nothing is expanded — during a
                tween the cards are out of flow and the grid needs it. */
             if (!open) unlockGrid();
@@ -249,6 +304,7 @@
               var od = open.querySelector(".au-member__detail");
               if (od && od.__auRecheck) od.__auRecheck();
             }
+            refreshIfMoved(heightBefore);
           },
         }),
       );
@@ -259,6 +315,35 @@
         markOverflow(next);
       }
       emit(next);
+    }
+
+    /* CSS transitions come back on only once Flip has put every inline style
+       away AND the browser has resolved the result. Re-enabled in the same
+       tick, the jump from Flip's last written transform to none is itself
+       handed to CSS as a transition, and the cards glide in from wherever
+       the previous frame left them. */
+    function endMorph(list, gen) {
+      var raf = window.requestAnimationFrame;
+      raf(function () {
+        raf(function () {
+          if (gen !== morphGen) return; // a newer morph owns the cards now
+          void grid.offsetWidth; // resolve styles with transitions still off
+          list.forEach(function (c) {
+            c.classList.remove("is-morphing");
+          });
+        });
+      });
+    }
+
+    /* The lock keeps the page still in the normal case. If an opened story
+       ever outgrows it (a very long bio on a narrow screen) everything below
+       the roster has moved, so ScrollTrigger re-measures — only then. */
+    function refreshIfMoved(before) {
+      var after = grid.getBoundingClientRect().height;
+      if (Math.abs(after - before) < 1) return;
+      var CLT = window.CLT;
+      if (CLT && typeof CLT.refresh === "function") CLT.refresh();
+      else if (window.ScrollTrigger) window.ScrollTrigger.refresh();
     }
 
     /* The story is held back until the band has nearly finished growing, then
@@ -340,8 +425,12 @@
         if (CLT && typeof CLT.scrollTo === "function") CLT.scrollTo(Math.max(0, y));
         else window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
       };
-      if (delay && gsap) track(gsap.delayedCall(delay, run));
-      else run();
+      if (delay && gsap) {
+        pendingScroll = gsap.delayedCall(delay, function () {
+          pendingScroll = null;
+          run();
+        });
+      } else run();
     }
 
     function emit(card) {
@@ -380,12 +469,31 @@
       if (!toggle || !grid.contains(toggle)) return;
       var member = toggle.closest(MEMBER);
       if (!member) return;
+      /* The toggles are Webflow link blocks (href="#"). Webflow's own script
+         happens to cancel the jump today; don't depend on it — a followed
+         "#" scrolls the page to the top mid-morph. */
+      e.preventDefault();
       setOpen(member === open ? null : member);
+    });
+
+    /* Link-block toggles answer Enter natively but not Space, which is what a
+       keyboard user expects of something announced as a button. */
+    all(TOGGLE, grid).forEach(function (t) {
+      if (t.tagName === "A" && !t.hasAttribute("role")) t.setAttribute("role", "button");
+    });
+    grid.addEventListener("keydown", function (e) {
+      if (e.key !== " " && e.key !== "Spacebar") return;
+      var toggle = e.target.closest ? e.target.closest(TOGGLE) : null;
+      if (!toggle || toggle.tagName !== "A" || !grid.contains(toggle)) return;
+      e.preventDefault();
+      toggle.click();
     });
 
     document.addEventListener("keydown", function (e) {
       if (!open) return;
       if (e.key !== "Escape" && e.key !== "Esc") return;
+      // A dialog open over the page owns Escape.
+      if (e.defaultPrevented || document.querySelector(".clt-dialog[open]")) return;
       e.preventDefault();
       var toggle = open.querySelector(TOGGLE);
       setOpen(null);
@@ -415,12 +523,18 @@
       if (!fresh.length) return true;
       fresh.forEach(function (c) {
         c.__auEntrance = true;
+        c.classList.add("is-entering");
       });
       gsap.set(fresh, { autoAlpha: 0, y: 26, scale: 0.97, force3D: true });
       ST.batch(fresh, {
         start: "top 88%",
         once: true,
         onEnter: function (batch) {
+          // Cards a click has already revealed (finishEntrance) stay put.
+          batch = batch.filter(function (c) {
+            return !c.__auEntered;
+          });
+          if (!batch.length) return;
           gsap.to(batch, {
             autoAlpha: 1,
             y: 0,
@@ -431,6 +545,12 @@
             overwrite: "auto",
             /* Clear everything: Flip must measure an untransformed layout. */
             clearProps: "transform,opacity,visibility,willChange",
+            onComplete: function () {
+              batch.forEach(function (c) {
+                c.__auEntered = true;
+                c.classList.remove("is-entering");
+              });
+            },
           });
         },
       });
@@ -450,9 +570,7 @@
         return;
       }
       if (!target || target.getAttribute("data-au-member") === null) return;
-      if (entranceOn) {
-        gsap.set(cards(), { clearProps: "transform,opacity,visibility,willChange" });
-      }
+      if (entranceOn) finishEntrance(cards());
       window.requestAnimationFrame(function () {
         setOpen(target);
       });

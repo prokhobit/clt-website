@@ -62,9 +62,13 @@
     }
     gsap.registerPlugin(ST);
 
+    // clearProps "filter": a leftover blur(0px) is still a filter, and an
+    // element with any filter becomes the backdrop root for everything inside
+    // it — the glass panels and the hero jump-nav lose their frosted blur.
     var heroBits = gsap.utils.toArray(".yap-hero [data-yr]");
     gsap.to(heroBits, {
       opacity: 1, y: 0, filter: "blur(0px)", duration: 1.05, ease: "power3.out", stagger: 0.12, delay: 0.15,
+      clearProps: "filter",
       onStart: function () { heroBits.forEach(function (el) { el.classList.add("is-in"); }); },
     });
 
@@ -76,6 +80,7 @@
         onEnter: function () {
           gsap.to(items, {
             opacity: 1, y: 0, filter: "blur(0px)", duration: 0.9, ease: "power3.out", stagger: 0.08,
+            clearProps: "filter",
             onStart: function () { items.forEach(function (el) { el.classList.add("is-in"); }); },
           });
         },
@@ -116,14 +121,18 @@
         if (tilt) {
           tx = (py - 0.5) * -5; ty = (px - 0.5) * 6;
           if (!raf) raf = requestAnimationFrame(function () {
-            p.style.transform = "perspective(900px) rotateX(" + tx.toFixed(2) + "deg) rotateY(" + ty.toFixed(2) + "deg) translateY(-3px)";
             raf = null;
+            // Every tilt panel is also a [data-yr] reveal. While that tween
+            // is still writing its transform, a tilt write would fight it
+            // frame by frame — wait until the panel has landed.
+            if (window.gsap && window.gsap.isTweening(p)) return;
+            p.style.transform = "perspective(900px) rotateX(" + tx.toFixed(2) + "deg) rotateY(" + ty.toFixed(2) + "deg) translateY(-3px)";
           });
         }
       });
       p.addEventListener("pointerleave", function () {
         if (orb) p.style.setProperty("--orb", "0");
-        if (tilt) p.style.transform = "";
+        if (tilt && !(window.gsap && window.gsap.isTweening(p))) p.style.transform = "";
       });
     });
   }
@@ -131,7 +140,9 @@
   /* ── YouTube iframe ───────────────────────────────────────────────────── */
   function youtube(id, start) {
     var iframe = document.createElement("iframe");
-    iframe.src = "https://www.youtube.com/embed/" + id + "?autoplay=1&rel=0&modestbranding=1" + (start ? "&start=" + start : "");
+    start = parseInt(start, 10);
+    iframe.src = "https://www.youtube.com/embed/" + encodeURIComponent(id || "") +
+      "?autoplay=1&rel=0&modestbranding=1&playsinline=1" + (start > 0 ? "&start=" + start : "");
     iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
     iframe.setAttribute("allowfullscreen", "");
     return iframe;
@@ -155,6 +166,14 @@
     var close = document.getElementById("yap-lb-close");
     if (!lb || !frame || !close) return;
     var opener = null;
+    var removeTimer = 0;
+
+    function dropIframe() {
+      clearTimeout(removeTimer);
+      removeTimer = 0;
+      var f = document.getElementById("yap-lb-iframe");
+      if (f) f.remove();
+    }
 
     function stopScroll() {
       if (CLT && typeof CLT.stopScroll === "function") CLT.stopScroll();
@@ -167,6 +186,9 @@
       document.body.style.overflow = "";
     }
     function open(btn) {
+      // Reopened inside the close fade: the previous player is still there,
+      // still playing. Replace it rather than stacking a second one.
+      dropIframe();
       opener = btn;
       var iframe = youtube(btn.getAttribute("data-yt"));
       iframe.id = "yap-lb-iframe";
@@ -183,11 +205,9 @@
       if (!lb.classList.contains("is-open")) return;
       lb.classList.remove("is-open");
       startScroll();
-      setTimeout(function () {
-        var f = document.getElementById("yap-lb-iframe");
-        if (f) f.remove();
-      }, 380);
+      removeTimer = setTimeout(dropIframe, 380); // after the fade, so it doesn't blink
       if (opener) opener.focus({ preventScroll: true });
+      opener = null;
     }
 
     document.querySelectorAll(".yap-card .yap-video").forEach(function (btn) {
