@@ -1945,9 +1945,13 @@
 
   // ── curtain — first-load raise + internal-nav transitions (opt-in) ─────────
   function initCurtain() {
-    if (!document.body.hasAttribute("data-clt-curtain")) return;
     var gsap = window.gsap;
     var stage = $(".clt-curtain-stage");
+    // Opt in with data-clt-curtain on <body>, or simply by authoring the
+    // stage. A stage in the markup (e.g. from a shared Webflow component) is
+    // drawn closed by CSS, so on a page whose <body> lacks the attribute it
+    // used to stay shut over the whole page, forever.
+    if (!document.body.hasAttribute("data-clt-curtain") && !stage) return;
     if (!stage) {
       // inject if not authored (minor flash)
       stage = document.createElement("div");
@@ -2438,12 +2442,16 @@
   // when a curtain rise is pending (that IS the arrival), reduced motion, or
   // no GSAP.
   function initArrival() {
-    if (!document.body || !document.body.hasAttribute("data-clt-arrival")) return;
-    var gsap = window.gsap;
+    // Read AND clear the flag the curtain leaves when it navigates. It means
+    // "this load was reached through the curtain" — one load only. Left in
+    // place, every later load in the session skipped the arrival fade.
     var pendingCurtain = false;
     try {
       pendingCurtain = sessionStorage.getItem("clt-curtain") === "1";
+      sessionStorage.removeItem("clt-curtain");
     } catch (_) {}
+    if (!document.body || !document.body.hasAttribute("data-clt-arrival")) return;
+    var gsap = window.gsap;
     if (env.reducedMotion || !gsap || pendingCurtain) return;
     var dim = document.createElement("div");
     dim.setAttribute("aria-hidden", "true");
