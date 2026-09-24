@@ -7259,8 +7259,8 @@ a.clt-icon-disc:hover svg,
   }
 }
 
-/* Close button (dialogs, team cards) */
-.clt-dialog__close,
+/* Close button (dialogs, team cards). Scoped to .clt-dialog so it outranks the legacy page embeds. */
+.clt-dialog .clt-dialog__close,
 .au-member__close {
   width: 2.5rem;
   height: 2.5rem;
@@ -7278,27 +7278,28 @@ a.clt-icon-disc:hover svg,
   transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), rotate var(--dur-base) var(--ease-stage), scale var(--dur-fast) var(--ease);
 }
 
-.clt-dialog__close svg,
+.clt-dialog .clt-dialog__close svg,
 .au-member__close svg {
   width: 1.1rem;
   height: 1.1rem;
   stroke-width: 1.8;
 }
 
-.clt-dialog__close:hover,
+.clt-dialog .clt-dialog__close:hover,
 .au-member__close:hover {
   color: var(--clt-bone);
   border-color: color-mix(in srgb, var(--clt-brass-rgb) 66%, transparent);
   background: color-mix(in srgb, var(--clt-brass-rgb) 26%, transparent);
+  transform: none;
   rotate: 90deg;
 }
 
-.clt-dialog__close:active,
+.clt-dialog .clt-dialog__close:active,
 .au-member__close:active {
   scale: 0.94;
 }
 
-.clt-dialog__close:focus-visible,
+.clt-dialog .clt-dialog__close:focus-visible,
 .au-member__close:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-offset);
