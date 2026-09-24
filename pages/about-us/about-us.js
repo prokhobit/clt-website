@@ -112,7 +112,9 @@
       MEMBER + ".is-morphing," +
       MEMBER + ".is-morphing .au-member__portrait," +
       MEMBER + ".is-morphing .au-member__close," +
-      MEMBER + ".is-entering{transition:none!important;}";
+      MEMBER + ".is-entering{transition:none!important;}" +
+      MEMBER + ".is-morphing .clt-lamp-layer::before," +
+      MEMBER + ".is-morphing .clt-lamp-layer::after{animation-play-state:paused;}";
     document.head.appendChild(style);
   }
 
@@ -247,7 +249,7 @@
 
       var state = animate
         ? Flip.getState(all(FLIP_PARTS, grid), {
-            props: "borderRadius,boxShadow,opacity",
+            props: "borderRadius,opacity",
           })
         : null;
 

@@ -30,6 +30,17 @@
     return (m && m[name]) || fallback;
   }
 
+  // ── Eases ───────────────────────────────────────────────────────────────
+  var eases = { focus: "expo.out", reveal: "expo.out", drift: "none" };
+  function defineEases() {
+    var CustomEase = plugin("CustomEase");
+    if (!CustomEase) return;
+    CustomEase.create("pfs-focus", "M0,0 C0.12,0.62 0.2,0.92 0.42,0.98 0.62,1.01 0.8,1 1,1");
+    CustomEase.create("pfs-reveal", "M0,0 C0.18,0.72 0.3,0.96 0.52,0.99 0.72,1.01 0.86,1 1,1");
+    CustomEase.create("pfs-drift", "M0,0 C0.25,0.08 0.55,0.62 1,1");
+    eases = { focus: "pfs-focus", reveal: "pfs-reveal", drift: "pfs-drift" };
+  }
+
   // ── Hero reveal ─────────────────────────────────────────────────────────
   function initHeroReveal() {
     var gsap = state.gsap;
@@ -37,9 +48,8 @@
     if (!hero) return null;
 
     var screen = query("[data-pfs-screen]", hero);
-    var drapeL = query(".pfs-hero__drape.is-left", hero);
-    var drapeR = query(".pfs-hero__drape.is-right", hero);
-    var valance = query(".pfs-hero__valance", hero);
+    var legacy = queryAll(".pfs-hero__drape, .pfs-hero__valance", hero);
+    if (legacy.length) gsap.set(legacy, { display: "none" }); // drapes retired
     var spot = query(".pfs-hero__spot", hero);
     var eyebrow = query(".pfs-hero__eyebrow", hero);
     var eyebrowText = query("[data-pfs-eyebrow]", hero);
@@ -53,23 +63,11 @@
     }
 
     var SplitText = plugin("SplitText");
-    var CustomEase = plugin("CustomEase");
-    var focusEase = "expo.out";
-    if (CustomEase) {
-      CustomEase.create(
-        "pfs-focus",
-        "M0,0 C0.12,0.62 0.2,0.92 0.42,0.98 0.62,1.01 0.8,1 1,1",
-      );
-      focusEase = "pfs-focus";
-    }
+    var focusEase = eases.focus;
 
     gsap.set([spot, eyebrow, title, lede].concat(actions), { autoAlpha: 0 });
     gsap.set(actions, { y: 16 });
-    gsap.set(screen, {
-      scale: 1.14,
-      clipPath: "inset(14% 18% 14% 18% round 2.5rem)",
-    });
-    gsap.set([drapeL, drapeR], { xPercent: 0, rotation: 0 });
+    gsap.set(screen, { scale: 1.12, autoAlpha: 0 });
     hero.classList.add("is-ready");
 
     var words = [title],
@@ -94,47 +92,14 @@
       paused: true,
       defaults: { ease: ease("easeStage", "expo.out") },
       onComplete: function () {
-        gsap.set(screen, { clearProps: "clipPath" });
+        gsap.set(screen, { clearProps: "transform,opacity,visibility" });
         gsap.set(words.concat(chars, [lede]), {
           clearProps: "filter,willChange",
         });
       },
     });
     tl.to(spot, { autoAlpha: 1, duration: 1.2, ease: "power2.out" }, 0)
-      .to(
-        drapeL,
-        {
-          xPercent: -115,
-          rotation: -2.5,
-          duration: 1.6,
-          ease: ease("easeVelvet", "power4.inOut"),
-        },
-        0.15,
-      )
-      .to(
-        drapeR,
-        {
-          xPercent: 115,
-          rotation: 2.5,
-          duration: 1.6,
-          ease: ease("easeVelvet", "power4.inOut"),
-        },
-        0.2,
-      )
-      .to(
-        valance,
-        {
-          yPercent: -40,
-          duration: 1.5,
-          ease: ease("easeVelvet", "power4.inOut"),
-        },
-        0.35,
-      )
-      .to(
-        screen,
-        { scale: 1, clipPath: "inset(0% 0% 0% 0% round 0rem)", duration: 1.9 },
-        0.25,
-      )
+      .to(screen, { scale: 1, autoAlpha: 1, duration: 1.9, ease: eases.reveal }, 0.1)
       .set([eyebrow, title], { autoAlpha: 1 }, 0.7)
       .fromTo(
         chars,
@@ -188,14 +153,16 @@
   }
 
   // ── Hero scroll ─────────────────────────────────────────────────────────
+  // The framed stage stays still; only the video drifts inside it and the
+  // copy lifts away, so the rounded clip is never re-rasterised on scroll.
   function initHeroScroll() {
     var gsap = state.gsap;
     var ST = plugin("ScrollTrigger");
     var hero = query("[data-pfs-hero]");
     if (!hero || !ST || state.reduced) return;
-    var stage = query("[data-pfs-stage]", hero);
+    var video = query(".pfs-hero__video", hero);
     var copy = query(".pfs-hero__copy", hero);
-    var drapes = queryAll(".pfs-hero__drape", hero);
+    gsap.set(video, { scale: 1.08, transformOrigin: "50% 50%" }); // overscan for the drift
     gsap
       .timeline({
         scrollTrigger: {
@@ -205,28 +172,10 @@
           scrub: 0.6,
           invalidateOnRefresh: true,
         },
-        defaults: { ease: "none" },
+        defaults: { ease: eases.drift },
       })
-      .to(stage, { scale: 0.92, yPercent: 6 }, 0)
-      .to(copy, { yPercent: -18, autoAlpha: 0.15 }, 0)
-      .to(
-        drapes[0],
-        {
-          x: function () {
-            return win.innerWidth * 0.12;
-          },
-        },
-        0,
-      )
-      .to(
-        drapes[1],
-        {
-          x: function () {
-            return -win.innerWidth * 0.12;
-          },
-        },
-        0,
-      );
+      .to(video, { yPercent: 3.5 }, 0)
+      .to(copy, { yPercent: -18, autoAlpha: 0.15 }, 0);
   }
 
   // ── Film popup ──────────────────────────────────────────────────────────
@@ -411,10 +360,8 @@
       { clearProps: "opacity,visibility,transform" },
     );
     state.gsap.set(query("[data-pfs-screen]", hero), {
-      clearProps: "transform,clipPath",
+      clearProps: "transform,opacity,visibility",
     });
-    state.gsap.set(query(".pfs-hero__drape.is-left", hero), { xPercent: -115 });
-    state.gsap.set(query(".pfs-hero__drape.is-right", hero), { xPercent: 115 });
   }
 
   function init(CLT) {
@@ -428,6 +375,7 @@
       return;
     }
     var teaser = null;
+    defineEases();
     [
       ["Hero reveal", initHeroReveal],
       ["Hero scroll", initHeroScroll],

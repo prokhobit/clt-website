@@ -56,6 +56,7 @@
 
 .pfs-hero {
   position: relative;
+  z-index: 2;
   padding: clamp(5.25rem, 9vh, 7rem) clamp(0.5rem, 2vw, 1.5rem) clamp(1.5rem, 4vh, 3rem);
   isolation: isolate;
 }
@@ -71,7 +72,7 @@
   border-radius: var(--arch) var(--arch) var(--r-shell) var(--r-shell) / 7rem 7rem var(--r-shell) var(--r-shell);
   background: var(--clt-void);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--clt-brass-rgb) 46%, transparent), 0 0 0 0.55rem rgb(0 0 0 / 0.38), 0 0 0 calc(0.55rem + 1px) color-mix(in srgb, var(--clt-brass-rgb) 22%, transparent), 0 40px 90px rgb(0 0 0 / 0.6), 0 0 80px color-mix(in srgb, var(--clt-candle-rgb) 8%, transparent);
-  transform-origin: 50% 30%;
+  transform: translateZ(0);
 }
 
 .pfs-hero__screen {
@@ -86,6 +87,7 @@
   inset: 0;
   width: 100%;
   height: 100%;
+  will-change: transform;
   object-fit: cover;
   display: block;
 }
@@ -97,68 +99,12 @@
   background: linear-gradient(180deg, rgb(6 5 8 / 0.55) 0%, rgb(6 5 8 / 0.08) 28%, rgb(6 5 8 / 0.25) 48%, rgb(6 5 8 / 0.88) 100%), radial-gradient(ellipse 80% 70% at 50% 45%, transparent 40%, rgb(6 5 8 / 0.55) 100%);
 }
 
-.pfs-hero__drape {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  z-index: 3;
-  width: 51%;
-  pointer-events: none;
-  transform-origin: 50% 0%;
-  background: var(--tex-noise), repeating-linear-gradient(90deg, transparent 0 1.6rem, color-mix(in srgb, var(--clt-linen-rgb) 5%, transparent) 1.8rem, transparent 2rem 3.6rem), repeating-linear-gradient(90deg, rgb(0 0 0 / 0.55) 0 0.45rem, transparent 1.3rem 2.7rem, rgb(0 0 0 / 0.38) 3.3rem 3.8rem), linear-gradient(177deg, #4a1822 0%, #3a111a 48%, #1d0a0f 100%);
-  background-size: 16rem 16rem, auto, auto, auto;
-  background-blend-mode: overlay, screen, multiply, normal;
-  box-shadow: inset 0 0 120px rgb(0 0 0 / 0.6);
-}
-
-.pfs-hero__drape.is-left {
-  left: 0;
-}
-
-.pfs-hero__drape.is-right {
-  right: 0;
-}
-
-.pfs-hero__drape.is-left::after,
-.pfs-hero__drape.is-right::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 2.5rem;
-}
-
-.pfs-hero__drape.is-left::after {
-  right: 0;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--clt-candle-rgb) 22%, transparent));
-}
-
-.pfs-hero__drape.is-right::after {
-  left: 0;
-  background: linear-gradient(270deg, transparent, color-mix(in srgb, var(--clt-candle-rgb) 22%, transparent));
-}
-
-.pfs-hero__valance {
-  position: absolute;
-  left: -2%;
-  right: -2%;
-  top: 0;
-  z-index: 4;
-  height: clamp(3.2rem, 8vh, 5.5rem);
-  pointer-events: none;
-  background: linear-gradient(0deg, color-mix(in srgb, var(--clt-candle-rgb) 55%, transparent) 0 2px, transparent 2px 8px), repeating-linear-gradient(90deg, rgb(0 0 0 / 0.45) 0 0.4rem, transparent 1.2rem 2.4rem), linear-gradient(180deg, #2a0c12, #52202a 70%, #3a111a);
-  -webkit-mask: linear-gradient(#000, #000) top / 100% calc(100% - 1.4rem) no-repeat, radial-gradient(50% 100% at 50% 0%, #000 97%, transparent 100%) bottom / 6.4rem 1.4rem repeat-x;
-  mask: linear-gradient(#000, #000) top / 100% calc(100% - 1.4rem) no-repeat, radial-gradient(50% 100% at 50% 0%, #000 97%, transparent 100%) bottom / 6.4rem 1.4rem repeat-x;
-  filter: drop-shadow(0 8px 14px rgb(0 0 0 / 0.6));
-}
-
 .pfs-hero__spot {
   position: absolute;
   inset: 0;
   z-index: 2;
   pointer-events: none;
   background: radial-gradient(ellipse 46% 60% at 50% 0%, color-mix(in srgb, var(--clt-candle-rgb) 24%, transparent), transparent 70%);
-  mix-blend-mode: screen;
 }
 
 .pfs-hero__copy {
@@ -215,29 +161,11 @@
     opacity: 0;
     animation: pfs-failsafe-in 0.6s ease 3s forwards;
   }
-  .w-mod-js .pfs-hero:not(.is-ready) .pfs-hero__drape.is-left {
-    animation: pfs-failsafe-left 1.2s var(--ease-velvet) 3s forwards;
-  }
-  .w-mod-js .pfs-hero:not(.is-ready) .pfs-hero__drape.is-right {
-    animation: pfs-failsafe-right 1.2s var(--ease-velvet) 3s forwards;
-  }
 }
 
 @keyframes pfs-failsafe-in {
   to {
     opacity: 1;
-  }
-}
-
-@keyframes pfs-failsafe-left {
-  to {
-    transform: translateX(-115%);
-  }
-}
-
-@keyframes pfs-failsafe-right {
-  to {
-    transform: translateX(115%);
   }
 }
 
@@ -829,10 +757,6 @@ dialog.clt-dialog.pfs-film::backdrop {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .pfs-hero__drape,
-  .pfs-hero__valance {
-    display: none;
-  }
   .clt-play__disc {
     transition: none;
   }

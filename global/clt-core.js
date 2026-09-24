@@ -1799,19 +1799,20 @@
     }
   }
 
-  // ── dust canopy (folded from clt-home-dust.js; consumes CLT.lenis + ticker)
+  // ── dust canopy ────────────────────────────────────────────────────────
+  // Particles float and twinkle in CSS (compositor only). Scroll parallax,
+  // inertia, pointer drift and the warp stretch move the three depth layers,
+  // not each particle, and the loop sleeps whenever nothing is moving.
   function initDust() {
     if (!config.dust) return;
-    var gsap = window.gsap;
-    if (!gsap) return; // needs gsap.quickSetter
-    var far = $("#dust-far"),
-      mid = $("#dust-mid"),
-      near = $("#dust-near");
-    var containers = [far, mid, near].filter(Boolean);
-    if (!containers.length) return;
+    var layers = [
+      { el: $("#dust-far"), count: 46, min: 1.0, max: 2.0, depth: 0.45, shift: 70, scrub: 1.3 },
+      { el: $("#dust-mid"), count: 31, min: 1.3, max: 2.8, depth: 0.78, shift: -130, scrub: 1.5 },
+      { el: $("#dust-near"), count: 18, min: 1.8, max: 3.6, depth: 1.15, shift: -260, scrub: 1.8 },
+    ].filter(function (l) { return l.el; });
+    if (!layers.length) return;
 
-    var ST = window.ScrollTrigger,
-      reduced = env.reducedMotion;
+    var reduced = env.reducedMotion;
     var warp = typeof config.warp === "number" ? config.warp : 1;
     var density = reduced
       ? 0.35
@@ -1819,167 +1820,119 @@
         ? config.mobileDensity
         : config.density;
     density = clamp(0, 2, Number.isFinite(+density) ? +density : 1);
-    var dustTweens = [];
     var tones = ["warm", "warm", "warm", "brass", "brass", "cool"];
-    var stars = [];
     function rnd(a, b) {
       return a + Math.random() * (b - a);
     }
 
-    containers.forEach(function (c) {
-      var prev = c.querySelectorAll(".clt-home-dust.is-particle");
+    // A page without dust styles would only animate invisible dots.
+    var probe = document.createElement("div");
+    probe.className = "clt-home-dust is-particle is-warm";
+    layers[0].el.appendChild(probe);
+    var styled = getComputedStyle(probe).backgroundColor !== "rgba(0, 0, 0, 0)";
+    probe.remove();
+    if (!styled) return;
+
+    layers.forEach(function (layer) {
+      var prev = layer.el.querySelectorAll(".clt-home-dust.is-particle");
       for (var i = 0; i < prev.length; i++) prev[i].remove();
-    });
-
-    function spawn(container, count, minSize, maxSize, depth) {
-      if (!container) return;
       var frag = document.createDocumentFragment();
-      var total = Math.round(count * density);
-      for (var i = 0; i < total; i++) {
+      var total = Math.round(layer.count * density);
+      for (var j = 0; j < total; j++) {
         var el = document.createElement("div");
-        var tone = tones[Math.floor(Math.random() * tones.length)];
-        var size = rnd(minSize, maxSize);
-        el.className = "clt-home-dust is-particle is-" + tone;
-        el.style.width = size + "px";
-        el.style.height = size + "px";
-        el.style.left = rnd(0, 100) + "%";
-        el.style.top = rnd(0, 100) + "%";
-        // Let the browser allocate compositing layers rather than forcing each particle.
-        el.style.setProperty("--twinkle-dur", rnd(2.4, 7.2) + "s");
-        el.style.setProperty("--twinkle-delay", rnd(0, 5.5) + "s");
-        el.style.setProperty("--twinkle-lo", rnd(0.15, 0.36).toFixed(2));
-        el.style.setProperty("--twinkle-hi", rnd(0.72, 1).toFixed(2));
+        var size = rnd(layer.min, layer.max);
+        el.className = "clt-home-dust is-particle is-" + tones[Math.floor(Math.random() * tones.length)];
+        el.style.cssText =
+          "width:" + size + "px;height:" + size + "px;left:" + rnd(0, 100) + "%;top:" + rnd(0, 100) + "%;" +
+          "--twinkle-dur:" + rnd(2.4, 7.2) + "s;--twinkle-delay:" + rnd(0, 5.5) + "s;" +
+          "--twinkle-lo:" + rnd(0.15, 0.36).toFixed(2) + ";--twinkle-hi:" + rnd(0.72, 1).toFixed(2) + ";" +
+          "--dx:" + (rnd(-18, 18) * layer.depth).toFixed(1) + "px;--dy:" + (rnd(-22, 22) * layer.depth).toFixed(1) + "px;" +
+          "--drift-dur:" + rnd(18, 42).toFixed(1) + "s;--drift-delay:-" + rnd(0, 40).toFixed(1) + "s";
         frag.appendChild(el);
-        var star = {
-          element: el,
-          depth: depth,
-          floatX: 0,
-          floatY: 0,
-          inertiaX: 0,
-          inertiaY: 0,
-          pointerY: 0,
-          setCss: gsap.quickSetter(el, "css"),
-        };
-        if (!reduced) {
-          dustTweens.push(gsap.to(star, {
-            floatX: rnd(-18, 18) * depth,
-            floatY: rnd(-22, 22) * depth,
-            duration: rnd(18, 42),
-            repeat: -1,
-            yoyo: true,
-            ease: "sine.inOut",
-          }));
-        }
-        stars.push(star);
       }
-      container.appendChild(frag);
-    }
+      layer.el.appendChild(frag);
+      layer.x = 0;
+      layer.y = 0;
+      layer.warp = 1;
+    });
+    if (reduced) return; // static texture only
 
-    spawn(far, 46, 1.0, 2.0, 0.45);
-    spawn(mid, 31, 1.3, 2.8, 0.78);
-    spawn(near, 18, 1.8, 3.6, 1.15);
-
-    if (reduced || !stars.length) return; // static texture only
-    function pauseDust() {
-      dustTweens.forEach(function (tween) { tween.paused(document.hidden); });
+    var gsap = window.gsap,
+      ST = window.ScrollTrigger;
+    if (gsap && ST) {
+      var trigger = $(config.triggerSelector) || document.body;
+      layers.forEach(function (l) {
+        gsap.to(l.el, {
+          y: l.shift,
+          ease: "none",
+          scrollTrigger: { trigger: trigger, start: "top top", end: "bottom bottom", scrub: l.scrub, invalidateOnRefresh: true },
+        });
+      });
     }
-    document.addEventListener("visibilitychange", pauseDust);
-    pauseDust();
 
     function getScrollY() {
-      return CLT.lenis && typeof CLT.lenis.scroll === "number"
-        ? CLT.lenis.scroll
-        : window.scrollY || 0;
+      return CLT.lenis && typeof CLT.lenis.scroll === "number" ? CLT.lenis.scroll : window.scrollY || 0;
     }
     var lastScroll = getScrollY(),
-      scrollImpulse = 0,
+      impulse = 0,
       pImX = 0,
       pImY = 0,
       lastPX = 0,
       lastPY = 0,
-      hasP = false;
+      hasP = false,
+      stop = null;
 
+    function frame() {
+      var scroll = getScrollY();
+      var delta = scroll - lastScroll;
+      lastScroll = scroll;
+      var velocity = CLT.lenis && typeof CLT.lenis.velocity === "number" ? CLT.lenis.velocity * 1000 : delta * 60;
+      impulse += clamp(-90, 90, delta);
+      var busy = Math.abs(impulse) > 0.05 || Math.abs(pImX) > 0.05 || Math.abs(pImY) > 0.05;
+      for (var i = 0; i < layers.length; i++) {
+        var l = layers[i];
+        var tx = pImX * 0.08 * l.depth - (CLT._scrollX || 0) * l.depth * 0.03;
+        var ty = -scroll * 0.065 * l.depth - impulse * 0.085 * l.depth + pImY * 0.035 * l.depth;
+        l.x += (tx - l.x) * 0.09;
+        l.y += (ty - l.y) * 0.11;
+        if (Math.abs(tx - l.x) > 0.1 || Math.abs(ty - l.y) > 0.1) busy = true;
+        l.el.style.translate = l.x.toFixed(1) + "px " + l.y.toFixed(1) + "px";
+        var w = clamp(1, 1 + 0.72 * warp, 1 + (Math.abs(velocity) / 4200) * 0.48 * warp * l.depth);
+        if (Math.abs(w - l.warp) > 0.03 || (w === 1 && l.warp !== 1)) {
+          l.warp = Math.abs(w - 1) < 0.03 ? 1 : w;
+          l.el.style.setProperty("--warp", l.warp.toFixed(2));
+        }
+        if (l.warp !== 1) busy = true;
+      }
+      impulse *= 0.9;
+      pImX *= 0.86;
+      pImY *= 0.86;
+      if (!busy && stop) {
+        stop();
+        stop = null;
+      }
+    }
+    function wake() {
+      if (!stop && !document.hidden) stop = addTick(frame);
+    }
+    window.addEventListener("scroll", wake, { passive: true });
     if (!env.isTouch) {
       window.addEventListener(
         "pointermove",
         function (e) {
-          if (!hasP) {
-            lastPX = e.clientX;
-            lastPY = e.clientY;
-            hasP = true;
-            return;
+          if (hasP) {
+            pImX += clamp(-30, 30, e.clientX - lastPX) * 0.22;
+            pImY += clamp(-30, 30, e.clientY - lastPY) * 0.16;
           }
-          pImX += clamp(-30, 30, e.clientX - lastPX) * 0.22;
-          pImY += clamp(-30, 30, e.clientY - lastPY) * 0.16;
           lastPX = e.clientX;
           lastPY = e.clientY;
+          hasP = true;
+          wake();
         },
         { passive: true },
       );
     }
-
-    addTick(function () {
-      var scroll = getScrollY();
-      var scrollDelta = scroll - lastScroll;
-      var velocity =
-        CLT.lenis && typeof CLT.lenis.velocity === "number"
-          ? CLT.lenis.velocity * 1000
-          : scrollDelta * 60;
-      lastScroll = scroll;
-      scrollImpulse += clamp(-90, 90, scrollDelta);
-      var sx = CLT._scrollX || 0;
-      for (var i = 0; i < stars.length; i++) {
-        var s = stars[i];
-        var parallaxY = -scroll * 0.065 * s.depth;
-        var targetInertiaY = -scrollImpulse * 0.085 * s.depth;
-        var targetInertiaX = pImX * 0.08 * s.depth;
-        var targetPointerY = pImY * 0.035 * s.depth;
-        s.inertiaY += (targetInertiaY + targetPointerY - s.inertiaY) * 0.11;
-        s.inertiaX += (targetInertiaX - s.inertiaX) * 0.09;
-        s.pointerY += (targetPointerY - s.pointerY) * 0.08;
-        var stretch = clamp(
-          1,
-          1 + 0.72 * warp,
-          1 + (Math.abs(velocity) / 4200) * 0.48 * warp * s.depth,
-        );
-        var rotate = clamp(
-          -14,
-          14,
-          (scrollDelta * 0.08 + pImX * 0.05) * s.depth,
-        );
-        s.setCss({
-          x: s.floatX + s.inertiaX + -sx * s.depth * 0.03, // lateral scrollX parallax
-          y: parallaxY + s.floatY + s.inertiaY + s.pointerY,
-          scaleY: stretch,
-          rotation: rotate,
-          force3D: true,
-        });
-      }
-      scrollImpulse *= 0.9;
-      pImX *= 0.86;
-      pImY *= 0.86;
-    });
-
-    if (ST) {
-      var trigger = $(config.triggerSelector) || document.body;
-      var st = function (target, yShift, scrub) {
-        if (!target) return;
-        gsap.to(target, {
-          y: yShift,
-          ease: "none",
-          scrollTrigger: {
-            trigger: trigger,
-            start: "top top",
-            end: "bottom bottom",
-            scrub: scrub,
-            invalidateOnRefresh: true,
-          },
-        });
-      };
-      st(far, 70, 1.3);
-      st(mid, -130, 1.5);
-      st(near, -260, 1.8);
-    }
+    wake();
   }
 
   // ── curtain — page-transition curtain ─────────────────────────────────────

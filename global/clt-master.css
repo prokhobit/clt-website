@@ -7283,6 +7283,33 @@ a.clt-icon-disc:hover svg,
   }
 }
 
+/* Dust */
+.clt-home-dust.is-layer {
+  will-change: transform, translate;
+}
+
+.clt-home-dust.is-layer > .clt-home-dust.is-particle {
+  transition: none;
+  will-change: auto;
+  mix-blend-mode: normal;
+  scale: 1 var(--warp, 1);
+  animation:
+    dust-twinkle var(--twinkle-dur, 3s) ease-in-out var(--twinkle-delay, 0s) infinite,
+    dust-drift var(--drift-dur, 30s) ease-in-out var(--drift-delay, 0s) infinite alternate;
+}
+
+@keyframes dust-drift {
+  to {
+    translate: var(--dx, 0) var(--dy, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clt-home-dust.is-layer > .clt-home-dust.is-particle {
+    animation: none;
+  }
+}
+
 /* Touch devices: hold the aurora still, no blur or blend */
 @media (pointer: coarse) {
   .clt-ambient .clt-ambient__blob {
