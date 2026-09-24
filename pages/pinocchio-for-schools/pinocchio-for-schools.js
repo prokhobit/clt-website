@@ -180,7 +180,7 @@
         1.55,
       );
 
-    var delay = state.CLT && state.CLT.arrivedViaCurtain ? 0.55 : 0.12;
+    var delay = doc.querySelector(".clt-curtain-stage") ? 0.55 : 0.12; // let the curtain open first
     gsap.delayedCall(delay, function () {
       tl.play();
     });

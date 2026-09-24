@@ -1,77 +1,125 @@
 /* ════════════════════════════════════════════════════════════════════════════
    CLT · EVENTS — page script
    ────────────────────────────────────────────────────────────────────────────
-   Replaces the inline <script> in the Events page's custom code. Owns the
-   contact form's client-side check and the payment cards (copy / open).
+   Runs from the Events page's "Before </body>" custom code (inline, after the
+   deferred Lenis + clt-core scripts). This file is the source of truth.
 
-   CONTRACT WITH clt-core.updated.js (site-wide)
-     · The jump-nav is core's (initJumpNav): scroll-spy, docking and the
-       click lock. The old inline script ran a second highlighter on every
-       scroll that knew nothing about the click lock, so the pill flicked
-       through sections mid-jump and fought core over .is-current. It is
-       gone — nothing here touches .clt-jumpnav.
-     · Scrolls through CLT.scrollTo, so Lenis owns the motion.
+   · Performances (#performances, [data-events-show]) — rows come from the
+     Performances CMS collection, hydrated by pages/shared/performances.js
+     (inlined just before this script). Hides past dates,
+     marks the next one, writes the countdown, flips to the closed notice
+     when the run is over, and plays the poster/details entrance.
+   · Tickets buttons ([data-events-ticket]) — preselect "Pinocchio tickets"
+     in the contact form and start the message with the chosen date.
+   · Share ([data-events-share]) — native share sheet, else copy the link.
+   · Payment cards — copy the handle / open mailto.
+
+   The contact form is a native Webflow form (#events-contact-form); clt-core
+   validates it (data-clt-validate) and Webflow stores the submission.
    ════════════════════════════════════════════════════════════════════════════ */
 (function () {
   "use strict";
-
-  if (window.__cltEventsReady) return; // idempotent — safe if injected twice
+  if (window.__cltEventsReady) return;
   window.__cltEventsReady = true;
 
-  var EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  function scrollToY(y) {
-    y = Math.max(0, y);
-    var CLT = window.CLT;
-    if (CLT && typeof CLT.scrollTo === "function") CLT.scrollTo(y);
-    else window.scrollTo({ top: y, behavior: "smooth" });
+  function initShow() {
+    var section = document.querySelector("[data-events-show]");
+    if (!section) return;
+    // CMS rows (Performances collection) → data-date, badges, calendar chips.
+    if (window.cltHydratePerformances) window.cltHydratePerformances(section);
+
+    var now = new Date();
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var rows = Array.prototype.slice.call(section.querySelectorAll("[data-date]"));
+    var upcoming = rows.filter(function (row) {
+      var p = (row.getAttribute("data-date") || "").split("-").map(Number);
+      if (p.length !== 3 || !p[0]) return true;
+      row.__date = new Date(p[0], p[1] - 1, p[2]);
+      var past = row.__date < today;
+      row.classList.toggle("is-past", past);
+      if (past) row.setAttribute("aria-hidden", "true");
+      return !past;
+    });
+
+    var countdown = section.querySelector("[data-events-countdown]");
+    var closed = section.querySelector("[data-events-closed]");
+    if (upcoming.length) {
+      var next = upcoming[0];
+      next.classList.add("is-next");
+      if (countdown && next.__date) {
+        var days = Math.round((next.__date - today) / 864e5);
+        countdown.textContent =
+          days === 0 ? "Performing today" :
+          days === 1 ? "Next performance tomorrow" :
+          "Next performance in " + days + " days";
+        countdown.hidden = false;
+      }
+    } else if (rows.length) {
+      section.classList.add("is-closed");
+      if (closed) closed.hidden = false;
+    }
+
+    // Entrance — poster rises into the lamp, details follow.
+    var gsap = window.gsap;
+    var ScrollTrigger = window.ScrollTrigger;
+    var frame = section.querySelector(".clt-events-show__frame");
+    var details = section.querySelectorAll(".clt-events-show__details > *:not([hidden])");
+    if (reduced || !gsap || !ScrollTrigger || !frame) return;
+    gsap.registerPlugin(ScrollTrigger);
+    gsap.set(frame, { autoAlpha: 0, yPercent: 10, rotationX: 14, transformOrigin: "50% 100%" });
+    gsap.set(details, { autoAlpha: 0, y: 18 });
+    ScrollTrigger.create({
+      trigger: section.querySelector(".clt-events-show__grid") || section,
+      start: "top 80%",
+      once: true,
+      onEnter: function () {
+        var ease = (window.CLT && window.CLT.motion && window.CLT.motion.easeStage) || "expo.out";
+        var tl = gsap.timeline({ defaults: { ease: ease } });
+        tl.to(frame, { autoAlpha: 1, yPercent: 0, rotationX: 0, duration: 1.25, clearProps: "all" }, 0);
+        tl.to(details, { autoAlpha: 1, y: 0, duration: 0.8, stagger: 0.06, clearProps: "transform,opacity,visibility" }, 0.15);
+      },
+    });
   }
 
-  /* ── Contact form ─────────────────────────────────────────────────────────
-     NOTE: this form has no action and is not a Webflow Form Block, so there
-     is nowhere for the message to go — it only validates and shows the
-     success panel. Wire it to a Webflow form (or a form service) before
-     relying on it. */
-  function initForm() {
-    var form = document.getElementById("contact-form");
-    if (!form) return;
-    form.addEventListener("submit", function (e) {
-      e.preventDefault();
-      var ok = true;
-      var firstBad = null;
-      form.querySelectorAll(".clt-field").forEach(function (f) {
-        var inp = f.querySelector("[required]");
-        if (!inp) {
-          f.removeAttribute("data-state");
+  function initTickets() {
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest && e.target.closest("[data-events-ticket]");
+      if (!btn || btn.hasAttribute("data-ticket-external")) return;
+      var topic = document.getElementById("ev-topic");
+      var message = document.getElementById("ev-message");
+      if (topic) topic.value = "Pinocchio tickets";
+      if (message && !message.value.trim()) {
+        var date = btn.getAttribute("data-events-ticket");
+        message.value = date
+          ? "Tickets for " + date + " — showtime (1:00 or 4:00 pm): , number of seats: "
+          : "Tickets for Pinocchio: The Musical — date & showtime: , number of seats: ";
+      }
+    });
+  }
+
+  function initShare() {
+    document.querySelectorAll("[data-events-share]").forEach(function (btn) {
+      var label = btn.querySelector(".clt-button__text") || btn;
+      var original = label.textContent;
+      btn.addEventListener("click", function () {
+        var url = location.origin + "/events#performances";
+        var data = { title: "Pinocchio: The Musical", text: "Pinocchio: The Musical at the Embassy Theater, Waltham", url: url };
+        if (navigator.share) {
+          navigator.share(data).catch(function () {});
           return;
         }
-        var value = (inp.value || "").trim();
-        var valid = !!value && (inp.type !== "email" || EMAIL.test(value));
-        if (valid) {
-          f.removeAttribute("data-state");
-        } else {
-          f.setAttribute("data-state", "error");
-          ok = false;
-          if (!firstBad) firstBad = inp;
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(url).then(function () {
+            label.textContent = "Link copied";
+            setTimeout(function () { label.textContent = original; }, 1800);
+          }).catch(function () {});
         }
       });
-      if (!ok) {
-        if (firstBad) firstBad.focus();
-        return;
-      }
-      form.classList.add("is-sent");
-      scrollToY(form.getBoundingClientRect().top + window.pageYOffset - 120);
-    });
-    // Clear a field's error as soon as it is fixed.
-    form.addEventListener("input", function (e) {
-      var f = e.target && e.target.closest ? e.target.closest(".clt-field") : null;
-      if (f && f.getAttribute("data-state") === "error" && (e.target.value || "").trim()) {
-        f.removeAttribute("data-state");
-      }
     });
   }
 
-  /* ── Payment cards: copy to clipboard / open mailto ─────────────────────── */
   function initPaymentCards() {
     document.querySelectorAll(".clt-events-payment-card").forEach(function (card) {
       var copyEl = card.querySelector(".clt-events-payment-card-copy");
@@ -80,16 +128,12 @@
       card.addEventListener("click", function () {
         var text = card.getAttribute("data-copy");
         var href = card.getAttribute("data-href");
-        if (text && navigator.clipboard) {
-          navigator.clipboard.writeText(text).catch(function () {});
-        }
+        if (text && navigator.clipboard) navigator.clipboard.writeText(text).catch(function () {});
         if (href) window.location.href = href;
         if (!copyEl) return;
-        // Repeat clicks restart the timer instead of stacking them, which
-        // left "Copied" stuck as the label once the first one restored it.
-        clearTimeout(timer);
         card.classList.add("is-copied");
         copyEl.textContent = href ? "Opened" : "Copied";
+        clearTimeout(timer);
         timer = setTimeout(function () {
           card.classList.remove("is-copied");
           copyEl.textContent = original;
@@ -99,11 +143,11 @@
   }
 
   function init() {
-    initForm();
+    initShow();
+    initTickets();
+    initShare();
     initPaymentCards();
   }
-
-  if (window.CLT && typeof window.CLT.ready === "function") window.CLT.ready(init);
-  else if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once: true });
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 })();

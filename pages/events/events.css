@@ -1,0 +1,1114 @@
+/* Events */
+.clt-events-main {
+  position: relative;
+  z-index: 2;
+}
+
+.clt-events-section {
+  position: relative;
+  padding-block: clamp(4.5rem, 9vw, 8.5rem);
+}
+
+.clt-events-workshop {
+  padding: clamp(3rem, 6vw, 6rem) clamp(2rem, 5vw, 5.5rem);
+  border-radius: var(--r-shell);
+}
+
+.clt-events-workshop-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: clamp(2rem, 4vw, 4rem);
+  align-items: end;
+  padding-bottom: 3rem;
+  margin-bottom: 3rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.clt-events-flyer {
+  position: relative;
+  width: clamp(220px, 26vw, 360px);
+  aspect-ratio: 1024 / 1536;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--clt-brass-rgb) 36%, transparent);
+  box-shadow: inset 0 1px 0 rgb(255 244 218 / 0.08), 0 24px 50px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(0 0 0 / 0.4);
+  background: var(--clt-night);
+  transform: rotate(-1.6deg);
+  transition: transform var(--dur-base) var(--ease), box-shadow var(--dur-base) var(--ease);
+}
+
+.clt-events-flyer:hover {
+  transform: rotate(0) translateY(-4px);
+  box-shadow: inset 0 1px 0 rgb(255 244 218 / 0.1), 0 32px 64px rgb(0 0 0 / 0.6), 0 0 32px color-mix(in srgb, var(--clt-brass-rgb) 18%, transparent);
+}
+
+.clt-events-flyer-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.clt-events-flyer-pin {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 30%, var(--clt-candle), var(--clt-brass-400) 60%, var(--clt-brass-600));
+  box-shadow: inset 0 1px 0 rgb(255 244 218 / 0.6), inset 0 -2px 4px rgb(0 0 0 / 0.5), 0 6px 14px rgb(0 0 0 / 0.6), var(--glow-brass);
+  z-index: 2;
+}
+
+.clt-events-flyer-caption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2rem;
+  text-align: center;
+  font-size: 0.7rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--clt-brass-300);
+}
+
+.clt-events-flyer-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 1.4rem;
+  color: var(--clt-brass-100);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border-bottom: 1px solid color-mix(in srgb, var(--clt-brass-rgb) 40%, transparent);
+  padding-bottom: 2px;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.clt-events-flyer-download:hover {
+  color: var(--clt-candle);
+  border-color: var(--clt-candle);
+}
+
+.clt-events-flyer-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 0.5rem;
+}
+
+.clt-events-workshop-title {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(2rem, 4vw, 3.4rem);
+  line-height: 1.04;
+  letter-spacing: -0.018em;
+  margin: 0.6rem 0 0;
+  text-wrap: balance;
+}
+
+.clt-events-workshop-lede {
+  color: var(--clt-linen-200);
+  font-size: 1.06rem;
+  max-width: 56ch;
+  margin: 1.2rem 0 0;
+}
+
+.clt-events-workshop-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  text-align: right;
+  font-family: var(--font-display);
+  color: var(--clt-brass-100);
+}
+
+.clt-events-workshop-stats .clt-events-workshop-stat-value {
+  font-size: 3rem;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.clt-events-workshop-stats .clt-events-workshop-stat-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--clt-brass-300);
+  font-weight: 700;
+  font-family: var(--font-body);
+  margin-top: 0.25rem;
+}
+
+.clt-events-workshop-stats .clt-events-workshop-stat-note {
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  margin-top: 0.85rem;
+}
+
+.clt-events-sessions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.4rem;
+  margin-bottom: 3rem;
+}
+
+.clt-events-session {
+  padding: 2rem;
+  border-radius: var(--r-card);
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.clt-events-session-num {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--clt-brass-300);
+  font-weight: 700;
+}
+
+.clt-events-session-num::before {
+  content: '';
+  flex: 0 0 8px;
+  height: 8px;
+  transform: rotate(45deg);
+  background: linear-gradient(135deg, var(--clt-brass-100), var(--clt-brass-400));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--clt-brass-rgb) 60%, transparent);
+}
+
+.clt-events-session-dates {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1.95rem;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--clt-linen-100);
+}
+
+.clt-events-session-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--line-soft);
+}
+
+.clt-events-session-row {
+  display: flex;
+  gap: 0.85rem;
+  align-items: baseline;
+}
+
+.clt-events-session-row-label {
+  flex: 0 0 96px;
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--clt-brass-300);
+  font-weight: 700;
+}
+
+.clt-events-session-row-value {
+  color: var(--clt-linen-100);
+  font-size: 1rem;
+}
+
+.clt-events-session-row-value em {
+  color: var(--clt-candle);
+  font-style: italic;
+  font-family: var(--font-display);
+  font-size: 1.06rem;
+}
+
+.clt-events-workshop-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.4rem;
+  margin-bottom: 3rem;
+}
+
+.clt-events-workshop-panel {
+  padding: 2.2rem;
+  border-radius: var(--r-card);
+}
+
+.clt-events-workshop-panel-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding-bottom: 1.4rem;
+  margin-bottom: 1.4rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.clt-events-workshop-panel-title {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1.7rem;
+  line-height: 1.1;
+  color: var(--clt-linen-100);
+}
+
+.clt-events-workshop-panel-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.clt-events-workshop-panel-list li {
+  display: flex;
+  gap: 0.85rem;
+  align-items: baseline;
+  color: var(--clt-linen-200);
+  font-size: 1.02rem;
+  line-height: 1.45;
+}
+
+.clt-events-workshop-panel-list li::before {
+  content: '';
+  flex: 0 0 6px;
+  height: 6px;
+  transform: translateY(8px) rotate(45deg);
+  background: linear-gradient(135deg, var(--clt-brass-100), var(--clt-brass-400));
+  box-shadow: 0 0 6px color-mix(in srgb, var(--clt-brass-rgb) 50%, transparent);
+}
+
+.clt-events-workshop-panel-list .clt-events-workshop-work-title {
+  font-family: var(--font-display);
+  font-size: 1.18rem;
+  font-weight: 500;
+}
+
+.clt-events-workshop-panel-foot {
+  margin: 1.4rem 0 0;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--line-soft);
+  font-size: 0.86rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.clt-events-workshop-notes {
+  margin-top: 1.75rem;
+  display: flex;
+  gap: 1.4rem;
+  flex-wrap: wrap;
+  font-size: 0.86rem;
+  color: var(--text-dim);
+  align-items: center;
+}
+
+.clt-events-workshop-notes span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.clt-events-workshop-notes svg {
+  width: 14px;
+  height: 14px;
+  opacity: 0.7;
+}
+
+.clt-events-reserve {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: clamp(1.5rem, 3vw, 3.5rem);
+}
+
+.clt-events-reserve-panel {
+  padding: clamp(2.2rem, 4vw, 4rem);
+  border-radius: var(--r-shell);
+}
+
+.clt-events-reserve-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-bottom: 2rem;
+}
+
+.clt-events-reserve-title {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(1.7rem, 2.8vw, 2.4rem);
+  line-height: 1.05;
+  letter-spacing: -0.012em;
+  color: var(--clt-linen-100);
+  margin: 0;
+}
+
+.clt-events-reserve-lede {
+  color: var(--text-muted);
+  font-size: 0.98rem;
+  max-width: 48ch;
+}
+
+.clt-events-message-input {
+  min-height: 8.25rem;
+  resize: vertical;
+}
+
+.clt-events-payment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.clt-events-payment-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1.4rem;
+  padding: 1.35rem;
+  border-radius: 18px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--clt-linen-rgb) 2.5%, transparent), transparent 60%), color-mix(in srgb, var(--clt-charcoal) 70%, var(--clt-plum) 30%);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-raise);
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.clt-events-payment-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--clt-brass-rgb) 40%, transparent);
+}
+
+.clt-events-payment-card-seal {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1.5rem;
+  color: var(--clt-linen-100);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--clt-linen-rgb) 6%, transparent), rgb(0 0 0 / 0.3));
+  border: 1px solid color-mix(in srgb, var(--clt-brass-rgb) 32%, transparent);
+  box-shadow: inset 0 1px 0 rgb(255 244 218 / 0.1);
+}
+
+.clt-events-payment-card-seal.is-venmo {
+  background: linear-gradient(180deg, #2a83e6 0%, #155aac 100%);
+  border-color: rgb(255 255 255 / 0.18);
+  color: #fff;
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 1.1rem;
+  letter-spacing: -0.02em;
+}
+
+.clt-events-payment-card-seal.is-zelle {
+  background: linear-gradient(180deg, #6d1ed4 0%, #3a1080 100%);
+  border-color: rgb(255 255 255 / 0.18);
+  color: #fff;
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 1.1rem;
+  letter-spacing: -0.02em;
+}
+
+.clt-events-payment-card-seal.is-mail {
+  background: radial-gradient(circle at 30% 30%, var(--clt-brass-200), var(--clt-brass-500) 75%);
+  color: #1a1108;
+}
+
+.clt-events-payment-card-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.clt-events-payment-card-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--clt-brass-300);
+  font-weight: 700;
+}
+
+.clt-events-payment-card-value {
+  font-family: var(--font-display);
+  font-size: 1.28rem;
+  color: var(--clt-linen-100);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.clt-events-payment-card-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 36px;
+  padding: 0 0.9rem;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--clt-linen-rgb) 4%, transparent);
+  border: 1px solid var(--line);
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--text-muted);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.clt-events-payment-card:hover .clt-events-payment-card-copy {
+  color: var(--clt-brass-100);
+  border-color: color-mix(in srgb, var(--clt-brass-rgb) 40%, transparent);
+  background: color-mix(in srgb, var(--clt-brass-rgb) 8%, transparent);
+}
+
+.clt-events-payment-card.is-copied .clt-events-payment-card-copy {
+  color: var(--clt-candle);
+  border-color: color-mix(in srgb, var(--clt-candle-rgb) 40%, transparent);
+  background: color-mix(in srgb, var(--clt-candle-rgb) 10%, transparent);
+}
+
+.clt-events-payment-note {
+  margin-top: 0.4rem;
+  padding: 1.1rem 1.4rem;
+  border-radius: 14px;
+  background: rgb(0 0 0 / 0.25);
+  border: 1px dashed var(--line-soft);
+  color: var(--text-dim);
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
+.clt-events-payment-note strong {
+  color: var(--clt-linen-200);
+  font-weight: 600;
+}
+
+@media (max-width: 1080px) {
+  .clt-events-reserve {
+    grid-template-columns: 1fr;
+  }
+  .clt-events-workshop-header {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  .clt-events-workshop-stats {
+    text-align: left;
+  }
+  .clt-events-flyer {
+    width: min(280px, 60vw);
+    margin: 0 auto;
+    transform: rotate(0);
+  }
+  .clt-events-flyer-wrap {
+    align-self: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .clt-events-sessions {
+    grid-template-columns: 1fr;
+  }
+  .clt-events-workshop-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 47.5rem) {
+  .clt-events-main .clt-wrap {
+    padding-inline: 1.25rem;
+  }
+  .clt-events-main .clt-page-hero {
+    padding-top: 4.5rem;
+    text-align: left;
+  }
+  .clt-events-main .clt-page-hero__title {
+    max-width: 8.5ch;
+    margin-inline: 0;
+    font-size: clamp(3rem, 15vw, 3.7rem);
+    overflow-wrap: normal;
+  }
+  .clt-events-main .clt-page-hero__lede {
+    margin-inline: 0;
+    max-width: 31ch;
+    font-size: 1rem;
+  }
+  .clt-events-main .clt-jumpnav {
+    display: flex;
+    width: 100%;
+    margin-inline: 0;
+  }
+  .clt-events-main .clt-jumpnav a {
+    padding-inline: 0.95rem;
+    font-size: 0.72rem;
+  }
+  .clt-events-section {
+    padding-block: clamp(3.5rem, 16vw, 5.5rem);
+  }
+  .clt-events-session,
+  .clt-events-workshop-panel,
+  .clt-events-session-row {
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .clt-events-session-row-label {
+    flex-basis: auto;
+  }
+  .clt-events-payment-card {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 1rem;
+    padding: 1.1rem;
+  }
+  .clt-events-payment-card-copy {
+    grid-column: 1 / -1;
+    justify-content: center;
+    width: 100%;
+  }
+  .clt-events-main :where(.clt-section-header__title, .clt-section-header__lede, .clt-events-workshop-title, .clt-events-reserve-title) {
+    max-width: 100%;
+    overflow-wrap: break-word;
+  }
+  .clt-footer__nav {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clt-events-flyer,
+  .clt-events-payment-card,
+  .clt-events-session,
+  .clt-events-workshop-panel {
+    transition: none;
+  }
+  .clt-events-flyer:hover {
+    transform: none;
+  }
+}
+
+/* Performances show */
+.clt-events-show {
+  scroll-margin-top: clamp(5rem,10vw,7.5rem);
+}
+
+.clt-events-show .clt-section-header {
+  margin-inline: auto;
+  text-align: center;
+  justify-items: center;
+}
+
+.clt-events-show__grid {
+  display: grid;
+  grid-template-columns: minmax(0,1fr);
+  gap: clamp(2.5rem,5vw,5rem);
+  max-width: 76rem;
+  margin: clamp(2.5rem,5vw,4rem) auto 0;
+  align-items: start;
+}
+
+.clt-panel.is-noir.clt-events-show__stage {
+  position: relative;
+  margin: 0;
+  width: 100%;
+  max-width: 29rem;
+  justify-self: center;
+  display: grid;
+  justify-items: center;
+  gap: 1.1rem;
+  padding: clamp(3rem,7vw,4.25rem) clamp(1.35rem,4vw,2.5rem) clamp(1.5rem,4vw,2.25rem);
+  border-radius: var(--r-shell);
+  overflow: hidden;
+  isolation: isolate;
+  background: radial-gradient(ellipse 70% 45% at 50% 100%,color-mix(in srgb,var(--clt-velvet-rgb) 18%,transparent),transparent 70%),linear-gradient(180deg,rgb(0 0 0 / 0.42),rgb(0 0 0 / 0.2)),var(--clt-pitch);
+  border: 1px solid color-mix(in srgb,var(--clt-linen-rgb) 6%,transparent);
+  box-shadow: inset 0 3px 10px rgb(0 0 0 / 0.7),inset 0 0 90px rgb(0 0 0 / 0.65),inset 0 -1px 0 rgb(255 244 218 / 0.06),var(--carve-ring),0 24px 60px rgb(0 0 0 / 0.5);
+}
+
+.clt-panel.is-noir.clt-events-show__stage::before {
+  display: none;
+}
+
+.clt-events-show__stage>.clt-lamp-layer {
+  height: 82%;
+  z-index: 0;
+}
+
+.clt-events-show__stage>:not(.clt-lamp-layer) {
+  position: relative;
+  z-index: 1;
+}
+
+.clt-events-show__poster-link {
+  display: block;
+  position: relative;
+  width: 100%;
+  max-width: 22.5rem;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 4px;
+  perspective: 1100px;
+}
+
+.clt-events-show__poster-link:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 6px;
+}
+
+.clt-events-show__frame {
+  position: relative;
+  transform-style: preserve-3d;
+  box-shadow: 0 30px 60px rgb(0 0 0 / 0.6),0 0 44px color-mix(in srgb,var(--clt-candle-rgb) 14%,transparent);
+  transition: box-shadow 600ms var(--ease-stage);
+}
+
+.clt-events-show__poster-link:hover .clt-events-show__frame {
+  box-shadow: 0 34px 70px rgb(0 0 0 / 0.65),0 0 60px color-mix(in srgb,var(--clt-candle-rgb) 24%,transparent);
+}
+
+.clt-events-show__art {
+  background: var(--clt-pitch);
+}
+
+.clt-events-show__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.clt-events-show__hint {
+  position: absolute;
+  left: 50%;
+  bottom: 1.4rem;
+  z-index: 3;
+  transform: translate(-50%,0.5rem);
+  padding: 0.55rem 1rem;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-brass);
+  background: rgb(8 6 10 / 0.72);
+  color: var(--clt-brass-100);
+  font: 700 0.62rem/1 var(--font-body);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease),transform var(--dur-base) var(--ease);
+  pointer-events: none;
+}
+
+.clt-events-show__poster-link:hover .clt-events-show__hint,
+.clt-events-show__poster-link:focus-visible .clt-events-show__hint {
+  opacity: 1;
+  transform: translate(-50%,0);
+}
+
+@media (hover: none) {
+  .clt-events-show__hint {
+    opacity: 1;
+    transform: translate(-50%,0);
+  }
+}
+
+.clt-events-show__footlight {
+  width: 80%;
+  height: 2.4rem;
+  margin-top: -1.6rem;
+  pointer-events: none;
+  background: radial-gradient(ellipse 50% 50% at 50% 50%,color-mix(in srgb,var(--clt-candle-rgb) 30%,transparent),transparent 70%);
+  filter: blur(8px);
+}
+
+.clt-events-show__accolade {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 1.02rem;
+  color: var(--clt-brass-200);
+  letter-spacing: 0.01em;
+}
+
+.clt-events-show__accolade::before {
+  content: "✦ ";
+  font-style: normal;
+  color: var(--clt-candle);
+}
+
+.clt-events-show__details {
+  display: grid;
+  gap: clamp(1.05rem,2vw,1.4rem);
+  align-content: start;
+  min-width: 0;
+}
+
+.clt-events-show__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.clt-events-show__badges .clt-badge {
+  white-space: normal;
+  max-width: 100%;
+  text-align: center;
+  line-height: 1.35;
+}
+
+.clt-events-show__credit {
+  margin: 0;
+  color: var(--clt-linen-200);
+  font-size: var(--type-body-lg);
+  line-height: var(--leading-body);
+}
+
+.clt-events-show__credit strong {
+  color: var(--clt-linen-100);
+  font-weight: 600;
+}
+
+.clt-events-show__lede {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: var(--leading-body);
+  max-width: 60ch;
+}
+
+.clt-events-show__venue {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  padding: 0.9rem 1.1rem;
+  border-radius: var(--r-field);
+  background: var(--carve-ground);
+  box-shadow: var(--carve-rest),var(--carve-ring);
+}
+
+.clt-events-show__venue-text {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.clt-events-show__venue-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  color: var(--clt-linen-100);
+}
+
+.clt-events-show__venue-addr {
+  margin: 0.1rem 0 0;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+.clt-events-show__venue .clt-button {
+  flex: none;
+}
+
+.clt-events-show__schedule-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+}
+
+.clt-events-show__schedule-title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--clt-brass-300);
+}
+
+.clt-events-show__schedule-note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+
+.clt-events-show__dates {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.clt-events-show__date {
+  grid-template-columns: auto minmax(0,1fr) auto;
+}
+
+.clt-events-show__date .clt-list-row__date {
+  width: 4rem;
+  padding-block: 0.55rem;
+}
+
+.clt-events-show__date .clt-list-row__title {
+  white-space: normal;
+  margin: 0;
+}
+
+.clt-events-show__date.is-past {
+  display: none;
+}
+
+.clt-events-show__date.is-next {
+  border-color: color-mix(in srgb,var(--clt-brass-rgb) 52%,transparent);
+  box-shadow: 0 0 28px color-mix(in srgb,var(--clt-candle-rgb) 12%,transparent);
+}
+
+.clt-events-show__date.is-next .clt-list-row__title::after {
+  content: "Next";
+  display: inline-block;
+  margin-left: 0.6rem;
+  padding: 0.2rem 0.5rem;
+  vertical-align: 0.2em;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-brass);
+  color: var(--clt-brass-100);
+  font: 700 0.55rem/1 var(--font-body);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.clt-events-show__times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.35rem;
+}
+
+.clt-events-show__time {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-soft);
+  background: rgb(0 0 0 / 0.28);
+  color: var(--clt-linen-200);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  transition: border-color var(--dur-base) var(--ease),color var(--dur-base) var(--ease),background var(--dur-base) var(--ease);
+}
+
+.clt-events-show__time::after {
+  content: "+";
+  color: var(--clt-brass-300);
+  font-weight: 700;
+}
+
+.clt-events-show__time:hover,
+.clt-events-show__time:focus-visible {
+  border-color: color-mix(in srgb,var(--clt-brass-rgb) 55%,transparent);
+  color: var(--clt-brass-100);
+  background: color-mix(in srgb,var(--clt-brass-rgb) 10%,transparent);
+}
+
+.clt-events-show__time:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.clt-events-show__countdown,
+.clt-events-show__closed {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.92rem;
+}
+
+.clt-events-show__countdown::before {
+  content: "";
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-right: 0.55rem;
+  border-radius: 50%;
+  background: var(--clt-candle);
+  box-shadow: 0 0 10px var(--clt-candle);
+  vertical-align: 0.08em;
+  animation: clt-events-show-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes clt-events-show-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.clt-events-show.is-closed .clt-events-show__dates,
+.clt-events-show.is-closed .clt-events-show__schedule-head,
+.clt-events-show.is-closed [data-events-tickets] {
+  display: none;
+}
+
+.clt-events-show__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.4rem;
+}
+
+@media (min-width: 56rem) {
+  .clt-events-show__grid {
+    grid-template-columns: minmax(0,29rem) minmax(0,1fr);
+  }
+  .clt-panel.is-noir.clt-events-show__stage {
+    position: sticky;
+    top: 9rem;
+  }
+  .clt-events-show__poster-link {
+    max-width: clamp(14rem,(100svh - 22rem) * 0.6,22.5rem);
+  }
+}
+
+@media (max-width: 55.999rem) {
+  .clt-events-show__details {
+    text-align: center;
+    justify-items: center;
+  }
+  .clt-events-show__badges,
+  .clt-events-show__actions {
+    justify-content: center;
+  }
+  .clt-events-show__venue,
+  .clt-events-show__dates,
+  .clt-events-show__schedule-head {
+    width: 100%;
+    text-align: left;
+  }
+  .clt-panel.is-noir.clt-events-show__stage {
+    max-width: min(26rem,100%);
+  }
+}
+
+@media (max-width: 30rem) {
+  .clt-panel.is-noir.clt-events-show__stage {
+    padding-inline: 1.1rem;
+    border-radius: var(--r-card);
+  }
+  .clt-events-show__date {
+    grid-template-columns: auto minmax(0,1fr);
+  }
+  .clt-events-show__date>.clt-button {
+    grid-column: 1 / -1;
+    justify-content: center;
+    width: 100%;
+  }
+  .clt-events-show__venue .clt-button {
+    width: 100%;
+    justify-content: center;
+  }
+  .clt-events-show__actions {
+    width: 100%;
+  }
+  .clt-events-show__actions .clt-button {
+    flex: 1 1 100%;
+    justify-content: center;
+    min-width: 0;
+  }
+}
+
+.clt-events-show__times-text[hidden],
+.clt-events-show__note[hidden],
+[data-ev-data] {
+  display: none;
+}
+
+.clt-events-show:not(.is-closed) [data-events-closed] {
+  display: none;
+}
+
+.clt-events-show__countdown:empty {
+  display: none;
+}
+
+.clt-events-show__note {
+  margin: 0.35rem 0 0;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.clt-events-show__empty {
+  padding: 1rem 1.25rem;
+  border-radius: var(--r-card);
+  border: 1px dashed var(--line-soft);
+  color: var(--text-dim);
+}
+
+.clt-events-show__empty p {
+  margin: 0;
+}
+
+.clt-perf-status {
+  display: inline-block;
+  width: max-content;
+  margin-bottom: 0.2rem;
+  padding: 0.22rem 0.55rem;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-brass);
+  color: var(--clt-brass-100);
+  font: 700 0.55rem/1 var(--font-body);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.clt-list-row:is([data-status="sold-out"],[data-status="cancelled"],[data-status="postponed"]) .clt-perf-status {
+  border-color: color-mix(in srgb,var(--clt-velvet-rgb) 70%,transparent);
+  color: var(--clt-linen-200);
+}
+
+.clt-list-row[data-status="cancelled"] .clt-list-row__title {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.clt-button.is-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+  filter: saturate(0.4);
+}
+
+dialog.clt-dialog.is-poster {
+  width: min(34rem,92vw);
+  max-width: min(34rem,92vw);
+  padding: 0.75rem;
+  overflow: hidden;
+  background: radial-gradient(ellipse 90% 60% at 50% 0%,color-mix(in srgb,var(--clt-candle-rgb) 10%,transparent),transparent 70%),var(--clt-pitch);
+}
+
+.clt-dialog__poster {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: calc(100dvh - 9rem);
+  object-fit: contain;
+  border-radius: calc(var(--r-shell) - 0.6rem);
+  background: #000;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clt-events-show__countdown::before {
+    animation: none;
+  }
+}
