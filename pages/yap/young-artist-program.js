@@ -1,282 +1,196 @@
-/* ════════════════════════════════════════════════════════════════════════════
-   CLT · YOUNG ARTIST PROGRAM 
-   ════════════════════════════════════════════════════════════════════════════ */
+/* CLT · Young Artist Program — hero overlay, interview player, student video lightbox. */
 (function () {
   "use strict";
 
+  if (window.__cltYapReady) return;
+  window.__cltYapReady = true;
+
+  var HERO_LEAD = 64; // px scrolled before the hero copy starts to hold
+  var EMBED = "https://www.youtube-nocookie.com/embed/";
+
   var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var fine = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-  var CLT = window.CLT || null;
+  var inlineFrames = [];
+  var booted = false;
 
-  function init() {
-    if (!document.querySelector(".yap")) return;
-    var lenis = initScroll();
-    initMotion();
-    initPanels();
-    initInterview();
-    initLightbox(lenis);
+  function all(sel, ctx) {
+    return Array.prototype.slice.call((ctx || document).querySelectorAll(sel));
+  }
+  function text(node) {
+    return node ? node.textContent.replace(/\s+/g, " ").trim() : "";
+  }
+  function focusQuietly(el) {
+    if (!el || typeof el.focus !== "function") return;
+    try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
   }
 
-  function initScroll() {
-    if (CLT) return CLT.lenis || null;
-    if (reduced || typeof window.Lenis === "undefined") return null;
-    var lenis = new window.Lenis({
-      duration: 1.1,
-      easing: function (t) {
-        return Math.min(1, 1.001 - Math.pow(2, -10 * t));
-      },
-      smoothWheel: true,
+  // YouTube refuses embeds that arrive without a referrer; enablejsapi lets us pause the interview.
+  function player(id, start, title) {
+    var q = "autoplay=1&rel=0&modestbranding=1&playsinline=1&enablejsapi=1";
+    var s = parseInt(start, 10);
+    if (s > 0) q += "&start=" + s;
+    if (/^https?:/.test(window.location.origin)) q += "&origin=" + encodeURIComponent(window.location.origin);
+    var f = document.createElement("iframe");
+    f.src = EMBED + encodeURIComponent(id) + "?" + q;
+    f.title = title || "YouTube video player";
+    f.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+    f.referrerPolicy = "strict-origin-when-cross-origin";
+    f.setAttribute("allowfullscreen", "");
+    return f;
+  }
+
+  function pauseInline() {
+    var msg = JSON.stringify({ event: "command", func: "pauseVideo", args: [] });
+    inlineFrames.forEach(function (f) {
+      try { f.contentWindow.postMessage(msg, "*"); } catch (e) {}
     });
-    if (window.gsap && window.ScrollTrigger) {
-      lenis.on("scroll", window.ScrollTrigger.update);
-      window.gsap.ticker.add(function (time) {
-        lenis.raf(time * 1000);
-      });
-      window.gsap.ticker.lagSmoothing(0);
-    } else {
-      (function raf(t) {
-        lenis.raf(t);
-        requestAnimationFrame(raf);
-      })();
-    }
-    return lenis;
   }
 
-  function initMotion() {
-    var gsap = window.gsap,
-      ST = window.ScrollTrigger;
-    if (!gsap || !ST || reduced) {
-      document.querySelectorAll(".yap [data-yr]").forEach(function (el) {
-        el.classList.add("is-in");
-      });
-      return;
-    }
+  // Hero: the copy holds while the photo rises under it (wide screens); the photo grows in elsewhere.
+  function initHeroOverlay() {
+    var gsap = window.gsap, ST = window.ScrollTrigger;
+    var copy = document.querySelector("[data-yap-hero-copy]");
+    var media = document.querySelector("[data-yap-hero-media]");
+    if (!copy || !media || !gsap || !ST || !gsap.matchMedia || reduced) return;
     gsap.registerPlugin(ST);
+    var hero = copy.parentNode;
 
-    var heroBits = gsap.utils.toArray(".yap-hero [data-yr]");
-    gsap.to(heroBits, {
-      opacity: 1,
-      y: 0,
-      filter: "blur(0px)",
-      duration: 1.05,
-      ease: "power3.out",
-      stagger: 0.12,
-      delay: 0.15,
-      clearProps: "filter",
-      onStart: function () {
-        heroBits.forEach(function (el) {
-          el.classList.add("is-in");
-        });
-      },
-    });
+    function travel() {
+      var copyMid = copy.offsetTop + copy.offsetHeight / 2;
+      var mediaMid = media.offsetTop + media.offsetHeight / 2;
+      return Math.max(0, mediaMid - copyMid);
+    }
 
-    gsap.utils
-      .toArray(".yap section, .yap .yap-student")
-      .forEach(function (sec) {
-        var items = gsap.utils.toArray("[data-yr]", sec);
-        if (!items.length) return;
-        ST.create({
-          trigger: sec,
-          start: "top 82%",
-          once: true,
-          onEnter: function () {
-            gsap.to(items, {
-              opacity: 1,
-              y: 0,
-              filter: "blur(0px)",
-              duration: 0.9,
-              ease: "power3.out",
-              stagger: 0.08,
-              clearProps: "filter",
-              onStart: function () {
-                items.forEach(function (el) {
-                  el.classList.add("is-in");
-                });
-              },
-            });
-          },
-        });
-      });
-
-    gsap.to(".yap-hero__media", {
-      yPercent: 12,
-      ease: "none",
-      scrollTrigger: {
-        trigger: ".yap-hero",
-        start: "top top",
-        end: "bottom top",
-        scrub: true,
-      },
-    });
-    gsap.fromTo(
-      ".yap-director__media img",
-      { scale: 1.12, yPercent: -4 },
-      {
-        scale: 1,
-        yPercent: 4,
-        ease: "none",
+    var mm = gsap.matchMedia();
+    mm.add("(min-width: 64rem)", function () {
+      gsap.timeline({
+        defaults: { ease: "none" },
         scrollTrigger: {
-          trigger: ".yap-director",
-          start: "top bottom",
-          end: "bottom top",
+          trigger: hero,
+          start: "top+=" + HERO_LEAD + " top",
+          end: function () { return "+=" + travel(); },
           scrub: true,
+          invalidateOnRefresh: true,
         },
-      },
-    );
-    gsap.fromTo(
-      ".yap-stage-panel",
-      { scale: 0.97 },
-      {
+      })
+        .fromTo(copy, { y: 0 }, { y: function () { return travel(); }, duration: 1 }, 0)
+        .fromTo(media, { scale: 0.92 }, { scale: 1, duration: 1, ease: "power1.out" }, 0)
+        .fromTo(media, { "--yap-scrim": 0 }, { "--yap-scrim": 1, duration: 0.45, ease: "power1.out" }, 0.1);
+      return function () { gsap.set([copy, media], { clearProps: "transform,--yap-scrim" }); };
+    });
+    mm.add("(max-width: 63.99rem)", function () {
+      gsap.fromTo(media, { scale: 0.94 }, {
         scale: 1,
-        ease: "power2.out",
-        scrollTrigger: {
-          trigger: ".yap-stage-panel",
-          start: "top 90%",
-          end: "top 50%",
-          scrub: 0.6,
-        },
-      },
-    );
-  }
-
-  function initPanels() {
-    if (!fine || reduced) return;
-    document.querySelectorAll(".yap .clt-panel").forEach(function (p) {
-      var tilt = p.hasAttribute("data-tilt");
-      var orb = !CLT || p.classList.contains("is-carved");
-      if (!tilt && !orb) return;
-      var raf = null,
-        tx = 0,
-        ty = 0;
-      p.addEventListener("pointermove", function (e) {
-        var r = p.getBoundingClientRect();
-        var px = (e.clientX - r.left) / r.width;
-        var py = (e.clientY - r.top) / r.height;
-        if (orb) {
-          p.style.setProperty("--mx", px * 100 + "%");
-          p.style.setProperty("--my", py * 100 + "%");
-          p.style.setProperty("--orb", "1");
-        }
-        if (tilt) {
-          tx = (py - 0.5) * -5;
-          ty = (px - 0.5) * 6;
-          if (!raf)
-            raf = requestAnimationFrame(function () {
-              raf = null;
-              if (window.gsap && window.gsap.isTweening(p)) return;
-              p.style.transform =
-                "perspective(900px) rotateX(" +
-                tx.toFixed(2) +
-                "deg) rotateY(" +
-                ty.toFixed(2) +
-                "deg) translateY(-3px)";
-            });
-        }
+        ease: "none",
+        scrollTrigger: { trigger: media, start: "top bottom", end: "top 40%", scrub: true },
       });
-      p.addEventListener("pointerleave", function () {
-        if (orb) p.style.setProperty("--orb", "0");
-        if (tilt && !(window.gsap && window.gsap.isTweening(p)))
-          p.style.transform = "";
-      });
+      return function () { gsap.set(media, { clearProps: "transform" }); };
     });
   }
 
-  /* ── YouTube iframe ───────────────────────────────────────────────────── */
-  function youtube(id, start) {
-    var iframe = document.createElement("iframe");
-    start = parseInt(start, 10);
-    iframe.src =
-      "https://www.youtube.com/embed/" +
-      encodeURIComponent(id || "") +
-      "?autoplay=1&rel=0&modestbranding=1&playsinline=1" +
-      (start > 0 ? "&start=" + start : "");
-    iframe.allow =
-      "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
-    iframe.setAttribute("allowfullscreen", "");
-    return iframe;
-  }
-
-  /* ── Director interview: plays in place ───────────────────────────────── */
-  function initInterview() {
-    var interview = document.querySelector(".yap .is-spotlit .yap-video");
-    if (!interview) return;
-    interview.addEventListener("click", function () {
-      if (interview.classList.contains("is-playing")) return;
-      interview.classList.add("is-playing");
-      interview.appendChild(
-        youtube(
-          interview.getAttribute("data-yt"),
-          interview.getAttribute("data-start"),
-        ),
-      );
-    });
-  }
-
-  /* ── Student videos: lightbox ─────────────────────────────────────────── */
-  function initLightbox(lenis) {
-    var lb = document.getElementById("yap-lb");
-    var frame = document.getElementById("yap-lb-frame");
-    var close = document.getElementById("yap-lb-close");
-    if (!lb || !frame || !close) return;
-    var opener = null;
-    var removeTimer = 0;
-
-    function dropIframe() {
-      clearTimeout(removeTimer);
-      removeTimer = 0;
-      var f = document.getElementById("yap-lb-iframe");
-      if (f) f.remove();
-    }
-
-    function stopScroll() {
-      if (CLT && typeof CLT.stopScroll === "function") CLT.stopScroll();
-      else if (lenis) lenis.stop();
-      document.body.style.overflow = "hidden";
-    }
-    function startScroll() {
-      if (CLT && typeof CLT.startScroll === "function") CLT.startScroll();
-      else if (lenis) lenis.start();
-      document.body.style.overflow = "";
-    }
-    function open(btn) {
-      dropIframe();
-      opener = btn;
-      var iframe = youtube(btn.getAttribute("data-yt"));
-      iframe.id = "yap-lb-iframe";
-      frame.appendChild(iframe);
-      lb.classList.add("is-open");
-      stopScroll();
-      requestAnimationFrame(function () {
-        requestAnimationFrame(function () {
-          close.focus({ preventScroll: true });
-        });
-      });
-    }
-    function shut() {
-      if (!lb.classList.contains("is-open")) return;
-      lb.classList.remove("is-open");
-      startScroll();
-      removeTimer = setTimeout(dropIframe, 380);
-      if (opener) opener.focus({ preventScroll: true });
-      opener = null;
-    }
-
-    document.querySelectorAll(".yap-card .yap-video").forEach(function (btn) {
+  // Interview: the iframe replaces the facade in place.
+  function initInline(page) {
+    all(".yap-video[data-yap-inline]", page).forEach(function (btn) {
       btn.addEventListener("click", function () {
-        open(btn);
+        var screen = btn.parentNode;
+        var id = btn.getAttribute("data-yt");
+        if (!id || btn.hidden) return;
+        var f = player(id, btn.getAttribute("data-start"), btn.getAttribute("aria-label"));
+        screen.appendChild(f);
+        inlineFrames.push(f);
+        btn.hidden = true;
+        screen.classList.add("is-playing");
+        focusQuietly(f);
       });
-    });
-    close.addEventListener("click", shut);
-    lb.addEventListener("click", function (e) {
-      if (e.target === lb) shut();
-    });
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") shut();
     });
   }
 
-  if (CLT && typeof CLT.ready === "function") CLT.ready(init);
-  else if (document.readyState === "loading")
-    document.addEventListener("DOMContentLoaded", init, { once: true });
-  else init();
+  // Student videos: clt-core opens the dialog (data-open-dialog); this fills it first.
+  // Capture on window runs before core's capture on document.
+  function initLightbox(page) {
+    var dlg = document.getElementById("yap-lb");
+    if (!dlg) return;
+    var frame = dlg.querySelector("[data-yap-lb-frame]");
+    var title = dlg.querySelector("[data-yap-lb-title]");
+    var meta = dlg.querySelector("[data-yap-lb-meta]");
+    if (!frame) return;
+
+    var CLT = window.CLT;
+    var viaCore = !!(CLT && CLT.dialogs && typeof CLT.dialogs.open === "function");
+
+    function empty() {
+      while (frame.firstChild) frame.removeChild(frame.firstChild);
+    }
+
+    function load(btn) {
+      var id = btn.getAttribute("data-yt");
+      if (!id || dlg.open) return false;
+      var card = btn.closest(".yap-card");
+      var student = btn.closest(".yap-student");
+      var piece = text(card && card.querySelector(".yap-card__piece"));
+      var name = text(student && student.querySelector(".yap-student__name"));
+      var label = [name, piece].filter(Boolean).join(" · ") || btn.getAttribute("aria-label") || "Student performance";
+
+      pauseInline();
+      empty();
+      frame.appendChild(player(id, btn.getAttribute("data-start"), label));
+      if (title) title.textContent = piece || label;
+      if (meta) meta.textContent = name;
+      dlg.setAttribute("aria-label", label);
+      return true;
+    }
+
+    // Every way out ends with `open` removed, so stop the video there.
+    function onToggle() { if (!dlg.hasAttribute("open")) empty(); }
+    if ("MutationObserver" in window) {
+      new MutationObserver(onToggle).observe(dlg, { attributes: true, attributeFilter: ["open"] });
+    }
+    dlg.addEventListener("close", onToggle);
+
+    window.addEventListener("click", function (e) {
+      var btn = e.target.closest && e.target.closest(".yap-video[data-yt]:not([data-yap-inline])");
+      if (!btn || !page.contains(btn) || !load(btn)) return;
+      if (viaCore) return;
+      e.preventDefault();
+      focusQuietly(btn);
+      if (typeof dlg.showModal === "function") dlg.showModal();
+      else dlg.setAttribute("open", "");
+    }, true);
+
+    if (!viaCore) {
+      dlg.addEventListener("click", function (e) {
+        var closer = e.target.closest && e.target.closest("[data-close-dialog]");
+        if (closer || e.target === dlg) {
+          if (typeof dlg.close === "function") dlg.close();
+          else { dlg.removeAttribute("open"); empty(); }
+        }
+      });
+    }
+  }
+
+  function boot() {
+    if (booted) return;
+    booted = true;
+    var page = document.querySelector(".yap-page");
+    if (!page) return;
+    [
+      ["hero overlay", initHeroOverlay],
+      ["interview", initInline],
+      ["lightbox", initLightbox],
+    ].forEach(function (part) {
+      try { part[1](page); }
+      catch (e) { console.warn("[CLT young-artist-program] " + part[0] + " failed", e); }
+    });
+  }
+
+  // clt-core flushes CLT.ready at the end of its boot; the timer covers a core that never gets there.
+  function start() {
+    if (window.CLT && typeof window.CLT.ready === "function") {
+      window.CLT.ready(boot);
+      setTimeout(boot, 3000);
+    } else {
+      boot();
+    }
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
+  else start();
 })();

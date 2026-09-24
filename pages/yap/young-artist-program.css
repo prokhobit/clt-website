@@ -191,13 +191,8 @@
   place-items: center;
   width: clamp(3.4rem, 6vw, 5rem);
   aspect-ratio: 1;
-  border-radius: var(--r-pill);
   translate: -50% -50%;
-  color: var(--clt-linen-100);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--clt-velvet) 76%, var(--clt-plum) 24%), color-mix(in srgb, var(--clt-velvet) 54%, var(--clt-void) 46%));
-  border: 1px solid color-mix(in srgb, var(--clt-candle-rgb) 42%, transparent);
-  box-shadow: inset 0 1px 0 rgb(255 244 218 / 0.12), inset 0 -1px 0 rgb(0 0 0 / 0.42), 0 10px 30px rgb(0 0 0 / 0.5), 0 0 16px color-mix(in srgb, var(--clt-velvet-rgb) 52%, transparent), 0 0 34px color-mix(in srgb, var(--clt-candle-rgb) 13%, transparent);
-  transition: scale 240ms var(--ease), background 480ms var(--ease-stage), border-color 380ms var(--ease), box-shadow 620ms var(--ease-stage), color 380ms var(--ease);
+  transition: scale 240ms var(--ease), color 320ms var(--ease), border-color 320ms var(--ease), background 240ms var(--ease), box-shadow 460ms var(--ease-stage);
 }
 
 .yap-play svg {
@@ -209,17 +204,10 @@
 .yap-video:hover .yap-play,
 .yap-video:focus-visible .yap-play {
   scale: 1.08;
-  color: var(--clt-brass-50);
-  border-color: color-mix(in srgb, var(--clt-candle-rgb) 64%, transparent);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--clt-velvet) 88%, var(--clt-candle) 12%), color-mix(in srgb, var(--clt-velvet) 64%, var(--clt-void) 36%));
-  box-shadow: inset 0 1px 0 rgb(255 244 218 / 0.18), inset 0 -1px 0 rgb(0 0 0 / 0.42), 0 14px 38px rgb(0 0 0 / 0.55), 0 0 22px color-mix(in srgb, var(--clt-velvet-rgb) 58%, transparent), 0 0 46px color-mix(in srgb, var(--clt-candle-rgb) 18%, transparent);
 }
 
 .yap-video:active .yap-play {
   scale: 0.96;
-  color: var(--clt-candle);
-  box-shadow: inset 0 3px 9px rgb(0 0 0 / 0.62), inset 0 -1px 0 rgb(255 244 218 / 0.14), 0 0 0 1px color-mix(in srgb, var(--clt-brass-rgb) 24%, transparent);
-  transition-duration: var(--dur-instant);
 }
 
 .yap-aside {
@@ -581,9 +569,6 @@ dialog.clt-dialog.yap-lb {
 .yap-lb .clt-dialog__close {
   position: static;
   flex: none;
-  width: 2.75rem;
-  height: 2.75rem;
-  color: var(--clt-bone);
 }
 
 @media (prefers-reduced-motion: reduce) {

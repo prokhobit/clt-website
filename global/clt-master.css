@@ -4988,32 +4988,8 @@ dialog.clt-dialog::backdrop {
   top: 0.85rem;
   right: 0.85rem;
   z-index: 2;
-  width: 2.25rem;
-  height: 2.25rem;
   display: grid;
   place-items: center;
-  border-radius: 50%;
-  border: 1px solid var(--line);
-  background: radial-gradient(circle at 32% 26%, color-mix(in srgb, var(--clt-linen-rgb) 12%, transparent), transparent 60%), rgb(0 0 0 / 0.4);
-  color: var(--text-muted);
-  font-size: 1.1rem;
-  line-height: 1;
-  cursor: pointer;
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
-}
-
-.clt-dialog__close:hover {
-  color: var(--clt-bone);
-  border-color: color-mix(in srgb, var(--clt-brass-rgb) 50%, transparent);
-  background: color-mix(in srgb, var(--clt-brass-rgb) 14%, transparent);
-  transform: rotate(90deg);
-}
-
-.clt-dialog__close:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-offset);
 }
 
 dialog.clt-dialog.is-wide {
@@ -7280,6 +7256,159 @@ a.clt-icon-disc:hover svg,
   .clt-jumpnav.is-docked {
     background: #171419;
     backdrop-filter: none;
+  }
+}
+
+/* Close button (dialogs, team cards) */
+.clt-dialog__close,
+.au-member__close {
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--clt-brass-rgb) 42%, transparent);
+  background: radial-gradient(circle at 32% 26%, color-mix(in srgb, var(--clt-linen-rgb) 10%, transparent), transparent 60%), color-mix(in srgb, var(--clt-void) 84%, transparent);
+  color: var(--clt-brass-100);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgb(255 244 218 / 0.12), 0 4px 14px rgb(0 0 0 / 0.5);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), rotate var(--dur-base) var(--ease-stage), scale var(--dur-fast) var(--ease);
+}
+
+.clt-dialog__close svg,
+.au-member__close svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  stroke-width: 1.8;
+}
+
+.clt-dialog__close:hover,
+.au-member__close:hover {
+  color: var(--clt-bone);
+  border-color: color-mix(in srgb, var(--clt-brass-rgb) 66%, transparent);
+  background: color-mix(in srgb, var(--clt-brass-rgb) 26%, transparent);
+  rotate: 90deg;
+}
+
+.clt-dialog__close:active,
+.au-member__close:active {
+  scale: 0.94;
+}
+
+.clt-dialog__close:focus-visible,
+.au-member__close:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* Play button (disc + label; also the YAP video thumbnails) */
+.clt-play {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.85rem;
+  color: var(--clt-linen-100);
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.clt-play:focus-visible {
+  outline: none;
+}
+
+.clt-play:focus-visible .clt-play__disc {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+.clt-play__disc {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 3.6rem;
+  height: 3.6rem;
+}
+
+.clt-play__disc,
+.yap-play {
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--clt-brass-rgb) 46%, transparent);
+  background: linear-gradient(200deg, rgb(255 244 218 / 0.16) 0%, rgb(255 244 218 / 0.03) 34%, transparent 62%), radial-gradient(circle at 50% 132%, color-mix(in srgb, var(--clt-brass-rgb) 24%, transparent), transparent 62%), linear-gradient(180deg, rgb(0 0 0 / 0.28), rgb(0 0 0 / 0.12));
+  -webkit-backdrop-filter: blur(10px) saturate(1.3);
+  backdrop-filter: blur(10px) saturate(1.3);
+  color: var(--clt-brass-100);
+  box-shadow: inset 0 1px 0 rgb(255 244 218 / 0.3), inset 0 2px 7px rgb(0 0 0 / 0.36), inset 0 -2px 8px color-mix(in srgb, var(--clt-brass-rgb) 16%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--clt-brass-rgb) 16%, transparent), 0 0 12px color-mix(in srgb, var(--clt-brass-rgb) 20%, transparent), 0 0 28px color-mix(in srgb, var(--clt-brass-rgb) 10%, transparent);
+  transition: color 320ms var(--ease), border-color 320ms var(--ease), background 240ms var(--ease), box-shadow 460ms var(--ease-stage);
+}
+
+.clt-play__icon {
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-left: 0.15rem;
+  fill: currentColor;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--clt-brass-rgb) 45%, transparent));
+}
+
+.clt-play:hover .clt-play__disc,
+.clt-play:focus-visible .clt-play__disc,
+.yap-video:hover .yap-play,
+.yap-video:focus-visible .yap-play {
+  color: var(--clt-candle);
+  background: linear-gradient(200deg, rgb(255 244 218 / 0.24) 0%, rgb(255 244 218 / 0.05) 38%, transparent 66%), radial-gradient(circle at 50% 128%, color-mix(in srgb, var(--clt-candle-rgb) 26%, transparent), transparent 64%);
+  border-color: color-mix(in srgb, var(--clt-candle-rgb) 58%, var(--clt-brass));
+  box-shadow: inset 0 1px 0 rgb(255 244 218 / 0.42), inset 0 0 0 1px color-mix(in srgb, var(--clt-brass-rgb) 50%, transparent), inset 0 0 16px color-mix(in srgb, var(--clt-candle-rgb) 24%, transparent), 0 0 16px color-mix(in srgb, var(--clt-brass-rgb) 40%, transparent), 0 0 36px color-mix(in srgb, var(--clt-candle-rgb) 20%, transparent);
+}
+
+.clt-play:hover .clt-play__icon,
+.clt-play:focus-visible .clt-play__icon {
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--clt-candle-rgb) 58%, transparent));
+}
+
+.clt-play__label {
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+}
+
+.clt-play__title {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  line-height: 1.1;
+}
+
+.clt-play__meta {
+  font: 700 0.6rem/1 var(--font-body);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--clt-brass-200);
+}
+
+.clt-play.is-lg .clt-play__disc {
+  width: 4.75rem;
+  height: 4.75rem;
+}
+
+.clt-play.is-lg .clt-play__icon {
+  width: 1.8rem;
+  height: 1.8rem;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .clt-play__disc {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--surface);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clt-play__disc,
+  .yap-play {
+    transition: none;
   }
 }
 
