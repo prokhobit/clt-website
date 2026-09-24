@@ -1,3 +1,8 @@
+/* ==========================================================================
+   CLT · HOME
+   Modules: hero frame scrub · acclaim marquee · explore carousel · show
+            (upcoming) · archive hall · zoom gallery · layout refresh
+   ========================================================================== */
 window.CLT_HERO_FRAMES = [
   "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a35ad19668aae30c2f4_frame-0001.avif",
   "https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/69fd4a35c6cbe27116ca83fd_frame-0002.avif",
@@ -250,6 +255,14 @@ window.CLT_HERO_FRAMES = [
 
   var win = window;
   var doc = document;
+  if (win.__cltHomeLoaded) {
+    win.console.warn(
+      "[CLT home] Duplicate homepage script ignored. Load only clt-home.js.",
+    );
+    return;
+  }
+  win.__cltHomeLoaded = true;
+  win.CLT_HOME_VERSION = "2026-09-23-v2";
 
   var SELECTOR = {
     heroSection: ".home-hero",
@@ -257,14 +270,11 @@ window.CLT_HERO_FRAMES = [
     heroLine:
       ".home-hero .clt-eyebrow, .home-hero .clt-page-hero__title, .home-hero .home-hero__presents",
     heroCue: ".home-hero__cue",
+    heroSkip: "[data-home-skip]",
 
     marqueeRoot: ".home-marquee .clt-marquee",
     marqueeTrack: ".clt-marquee__track",
-
-    pastViewport: ".home-past__viewport",
-    pastTrack: "[data-home-past]",
-    pastItem: ".home-past__item",
-    pastPoster: ".home-past__item .clt-poster",
+    marqueeSet: ".home-marquee.is-set",
 
     exploreSection: ".clt-home-explore",
     exploreMask: ".clt-home-explore.is-track-mask",
@@ -278,6 +288,10 @@ window.CLT_HERO_FRAMES = [
       ".clt-home-explore.is-card-desc, .clt-home-explore.is-card-sep, .clt-home-explore.is-card-meta",
     cursorLens: ".clt-cursor-lens",
 
+    show: "[data-home-show]",
+    showPoster: "[data-home-poster]",
+    archive: "[data-home-archive]",
+
     zoomSection: ".home-zoom",
     zoomFigure: ".home-zoom__fig",
     zoomCaption: ".home-zoom__cap",
@@ -286,18 +300,12 @@ window.CLT_HERO_FRAMES = [
     zoomOverlay: ".home-zoom__overlay",
     zoomOverlayItems:
       ".home-zoom__overlay .clt-eyebrow, .home-zoom__overlay-title, .home-zoom__overlay-copy, .home-zoom__overlay .clt-button",
-
-    reveal:
-      ".home-marquee[data-reveal], .clt-home-explore.is-header[data-reveal], .home-section__head[data-reveal], .clt-panel[data-reveal], .home-past__item[data-reveal]",
   };
 
   var state = {
     gsap: null,
     ScrollTrigger: null,
-    Draggable: null,
-    InertiaPlugin: null,
     CLT: null,
-    mainContext: null,
     contextIgnore: null,
     reduced: false,
     cleanups: [],
@@ -323,15 +331,12 @@ window.CLT_HERO_FRAMES = [
 
   function runOutsideContext(callback) {
     var result;
-
     if (typeof state.contextIgnore === "function") {
       state.contextIgnore(function () {
         result = callback();
       });
-
-      return typeof result === "undefined" ? callback() : result;
+      return result;
     }
-
     return callback();
   }
 
@@ -344,19 +349,89 @@ window.CLT_HERO_FRAMES = [
       quickToFn.tween.kill();
     }
   }
-
   function addTick(handler) {
-    var CLT = state.CLT;
-    var gsap = state.gsap;
-    if (CLT && typeof CLT._addTick === "function") {
-      CLT._addTick(handler);
+    var lastTime = null,
+      removed = false,
+      remove;
+    function tick(time) {
+      if (removed || doc.hidden) {
+        lastTime = null;
+        return;
+      }
+      var delta =
+        lastTime === null
+          ? 16.7
+          : Math.min(50, Math.max(0, (time - lastTime) * 1000));
+      lastTime = time;
+      handler(time, delta);
+    }
+    if (state.CLT && typeof state.CLT._addTick === "function") {
+      remove = state.CLT._addTick(tick);
+    } else if (state.gsap && state.gsap.ticker) {
+      state.gsap.ticker.add(tick);
+      remove = function () {
+        state.gsap.ticker.remove(tick);
+      };
+    }
+    function stop() {
+      if (removed) return;
+      removed = true;
+      if (typeof remove === "function") remove();
+    }
+    state.cleanups.push(stop);
+    return stop;
+  }
+
+  function observeVisibility(target, margin, callback) {
+    if (!("IntersectionObserver" in win)) {
+      callback(true);
       return;
     }
-    if (!gsap || !gsap.ticker) return;
-    gsap.ticker.add(handler);
+    var io = new IntersectionObserver(
+      function (entries) {
+        callback(entries[entries.length - 1].isIntersecting);
+      },
+      { rootMargin: margin || "0px" },
+    );
+    io.observe(target);
     state.cleanups.push(function () {
-      gsap.ticker.remove(handler);
+      io.disconnect();
     });
+  }
+
+  function onResizeSettled(callback) {
+    var timer;
+    listen(
+      win,
+      "resize",
+      function () {
+        win.clearTimeout(timer);
+        timer = win.setTimeout(callback, 180);
+      },
+      { passive: true },
+    );
+    state.cleanups.push(function () {
+      win.clearTimeout(timer);
+    });
+  }
+
+  function prepareLoopClone(clone) {
+    var hadReveal =
+      clone.hasAttribute("data-reveal") ||
+      clone.hasAttribute("data-clt-reveal");
+    if (hadReveal)
+      state.gsap.set(clone, { clearProps: "opacity,visibility,transform" });
+    clone.removeAttribute("data-clt-reveal");
+    clone.removeAttribute("id");
+    clone.removeAttribute("data-reveal");
+    queryAll("[id]", clone).forEach(function (el) {
+      el.removeAttribute("id");
+    });
+    [clone]
+      .concat(queryAll("a,button,input,select,textarea,[tabindex]", clone))
+      .forEach(function (el) {
+        el.setAttribute("tabindex", "-1");
+      });
   }
 
   function getGSAPGlobal(name) {
@@ -369,29 +444,10 @@ window.CLT_HERO_FRAMES = [
     return null;
   }
 
-  function activateAvailablePlugins() {
-    var gsap = state.gsap;
-    if (!gsap) return;
-
-    var activate = gsap["register" + "Plugin"];
-    if (typeof activate !== "function") return;
-
-    var plugins = [
-      state.ScrollTrigger,
-      state.Draggable,
-      state.InertiaPlugin,
-    ].filter(Boolean);
-
-    if (plugins.length) {
-      activate.apply(gsap, plugins);
-    }
-  }
-
   function getScrollPosition() {
     var CLT = state.CLT;
-    if (CLT && CLT.lenis && typeof CLT.lenis.scroll === "number") {
+    if (CLT && CLT.lenis && typeof CLT.lenis.scroll === "number")
       return CLT.lenis.scroll;
-    }
     return win.pageYOffset || doc.documentElement.scrollTop || 0;
   }
 
@@ -407,9 +463,7 @@ window.CLT_HERO_FRAMES = [
     var section = query(SELECTOR.heroSection);
     var canvas = query(SELECTOR.heroCanvas, section);
     var urls = win.CLT_HERO_FRAMES || [];
-
-    if (!section || !canvas || !urls.length || !ScrollTrigger) return;
-
+    if (!section || !canvas || !urls.length) return;
     var context = canvas.getContext("2d", { alpha: false });
     if (!context) return;
 
@@ -417,147 +471,336 @@ window.CLT_HERO_FRAMES = [
     var isMobileLike = win.matchMedia(
       "(max-width: 760px), (pointer: coarse)",
     ).matches;
-    // Frame-step downsamples the 244-frame sequence: desktop uses every 2nd
-    // frame (~122), mobile every 4th (~61). Halves network requests + decode
-    // with no perceptible loss at scrub speed.
+    var staticFrame = reduced || !ScrollTrigger;
     var step = isMobileLike ? 4 : 2;
     var total = urls.length;
-    var frames = new Array(total);
-    var currentFrame = 0;
-    var cssWidth = 0;
-    var cssHeight = 0;
+    var cfg = win.CLT_HOME_CONFIG || {};
+    function option(name, fallback, min, max) {
+      var value = Number(cfg[name]);
+      return Number.isFinite(value) && value > 0
+        ? Math.round(clamp(min, max, value))
+        : fallback;
+    }
+    var cacheLimit = staticFrame
+      ? 1
+      : option("heroCacheFrames", isMobileLike ? 6 : 10, 2, 16);
+    var maxPixels = option(
+      "heroMaxPixels",
+      isMobileLike ? 750000 : 1500000,
+      150000,
+      2073600,
+    );
+    var concurrency = isMobileLike ? 2 : 3;
+    var cache = new Map(),
+      pending = new Map(),
+      failed = new Map();
+    var wanted = [],
+      queue = [];
+    var currentFrame = 0,
+      lastDrawn = -1;
+    var cssWidth = 0,
+      cssHeight = 0,
+      pixelRatio = 0;
+    var disposed = false,
+      nearViewport = true,
+      paintFrame = 0;
+    var bufferWidth = 1,
+      bufferHeight = 1;
 
     function normalizeFrame(index) {
-      var rounded = Math.round(index);
-      if (step !== 1) rounded = Math.round(rounded / step) * step;
-      return clamp(0, total - 1, rounded);
+      return staticFrame
+        ? 0
+        : clamp(0, total - 1, Math.round(index / step) * step);
     }
-
-    function loadFrame(index) {
-      index = normalizeFrame(index);
-      if (frames[index] !== undefined) return;
-
+    function enabled() {
+      return !disposed && nearViewport && !doc.hidden;
+    }
+    function releaseBuffer(entry) {
+      entry.canvas.width = 0;
+      entry.canvas.height = 0;
+    }
+    function clearCache() {
+      cache.forEach(releaseBuffer);
+      cache.clear();
+      lastDrawn = -1;
+    }
+    function cancelPending() {
+      pending.forEach(function (job) {
+        job.image.onload = job.image.onerror = null;
+        job.image.removeAttribute("src");
+      });
+      pending.clear();
+      queue = [];
+    }
+    function trimForInsert() {
+      if (cache.size < cacheLimit) return;
+      var victim = null,
+        distance = -1;
+      cache.forEach(function (_entry, index) {
+        var d = Math.abs(index - currentFrame);
+        if (d > distance) {
+          distance = d;
+          victim = index;
+        }
+      });
+      if (victim !== null) {
+        releaseBuffer(cache.get(victim));
+        cache.delete(victim);
+      }
+    }
+    function paint() {
+      paintFrame = 0;
+      if (!enabled() || !cache.size) return;
+      var closest = null,
+        distance = Infinity;
+      cache.forEach(function (_entry, index) {
+        var d = Math.abs(index - currentFrame);
+        if (d < distance) {
+          closest = index;
+          distance = d;
+        }
+      });
+      if (closest === lastDrawn) return;
+      context.drawImage(
+        cache.get(closest).canvas,
+        0,
+        0,
+        canvas.width,
+        canvas.height,
+      );
+      lastDrawn = closest;
+    }
+    function schedulePaint() {
+      if (!paintFrame && enabled())
+        paintFrame = win.requestAnimationFrame(paint);
+    }
+    function pump() {
+      if (!enabled()) return;
+      while (pending.size < concurrency && queue.length) {
+        var index = queue.shift();
+        if (cache.has(index) || pending.has(index)) continue;
+        var retryAt = failed.get(index) || 0;
+        if (retryAt > Date.now()) continue;
+        load(index);
+      }
+    }
+    function load(index) {
       var image = new Image();
+      var job = { image: image };
+      pending.set(index, job);
       image.decoding = "async";
-      frames[index] = false;
-
       image.onload = function () {
-        frames[index] = image;
-        if (currentFrame === index) drawFrame(index);
+        if (pending.get(index) !== job) return;
+        pending.delete(index);
+        if (enabled() && wanted.indexOf(index) !== -1 && image.naturalWidth) {
+          trimForInsert();
+          var buffer = doc.createElement("canvas");
+          buffer.width = bufferWidth;
+          buffer.height = bufferHeight;
+          var target = buffer.getContext("2d", { alpha: false });
+          if (target) {
+            var scale = Math.max(
+              bufferWidth / image.naturalWidth,
+              bufferHeight / image.naturalHeight,
+            );
+            var width = image.naturalWidth * scale,
+              height = image.naturalHeight * scale;
+            target.drawImage(
+              image,
+              (bufferWidth - width) / 2,
+              (bufferHeight - height) / 2,
+              width,
+              height,
+            );
+            cache.set(index, { canvas: buffer });
+            schedulePaint();
+          } else {
+            buffer.width = buffer.height = 0;
+          }
+        }
+        image.onload = image.onerror = null;
+        image.removeAttribute("src");
+        pump();
       };
-
       image.onerror = function () {
-        frames[index] = null;
+        if (pending.get(index) !== job) return;
+        pending.delete(index);
+        failed.set(index, Date.now() + 30000);
+        image.onload = image.onerror = null;
+        image.removeAttribute("src");
+        pump();
       };
-
       image.src = urls[index];
     }
-
-    function nearestLoadedFrame(index) {
-      if (frames[index]) return frames[index];
-
-      for (var distance = 1; distance < total; distance += 1) {
-        if (frames[index - distance]) return frames[index - distance];
-        if (frames[index + distance]) return frames[index + distance];
-      }
-
-      return null;
-    }
-
     function drawFrame(index) {
-      index = normalizeFrame(index);
-      currentFrame = index;
-
-      if (frames[index] === undefined) loadFrame(index);
-
-      var image = frames[index] || nearestLoadedFrame(index);
-      if (!image || !image.naturalWidth) return;
-
-      var canvasWidth = canvas.width;
-      var canvasHeight = canvas.height;
-      var scale = Math.max(
-        canvasWidth / image.naturalWidth,
-        canvasHeight / image.naturalHeight,
-      );
-      var imageWidth = image.naturalWidth * scale;
-      var imageHeight = image.naturalHeight * scale;
-
-      context.clearRect(0, 0, canvasWidth, canvasHeight);
-      context.drawImage(
-        image,
-        (canvasWidth - imageWidth) / 2,
-        (canvasHeight - imageHeight) / 2,
-        imageWidth,
-        imageHeight,
-      );
+      currentFrame = normalizeFrame(index);
+      if (!enabled()) return;
+      wanted = [currentFrame];
+      for (
+        var distance = 1;
+        wanted.length < cacheLimit && distance < total;
+        distance++
+      ) {
+        var ahead = currentFrame + distance * step;
+        var behind = currentFrame - distance * step;
+        if (ahead < total) wanted.push(ahead);
+        if (wanted.length < cacheLimit && behind >= 0) wanted.push(behind);
+      }
+      queue = wanted.filter(function (frame) {
+        return !cache.has(frame) && !pending.has(frame);
+      });
+      schedulePaint();
+      pump();
     }
-
     function resizeCanvas() {
       var rect = canvas.getBoundingClientRect();
       var nextWidth = Math.max(1, Math.round(rect.width || win.innerWidth));
       var nextHeight = Math.max(1, Math.round(rect.height || win.innerHeight));
-
-      if (nextWidth === cssWidth && nextHeight === cssHeight) return;
-
+      var dpr = Math.min(win.devicePixelRatio || 1, isMobileLike ? 1.25 : 1.5);
+      if (
+        nextWidth === cssWidth &&
+        nextHeight === cssHeight &&
+        dpr === pixelRatio
+      )
+        return;
       cssWidth = nextWidth;
       cssHeight = nextHeight;
-
-      var dpr = Math.min(win.devicePixelRatio || 1, isMobileLike ? 1.25 : 2);
-      canvas.width = Math.round(nextWidth * dpr);
-      canvas.height = Math.round(nextHeight * dpr);
-
+      pixelRatio = dpr;
+      var scale = Math.min(
+        dpr,
+        Math.sqrt(maxPixels / (nextWidth * nextHeight)),
+      );
+      bufferWidth = Math.max(1, Math.floor(nextWidth * scale));
+      bufferHeight = Math.max(1, Math.floor(nextHeight * scale));
+      cancelPending();
+      clearCache();
+      canvas.width = bufferWidth;
+      canvas.height = bufferHeight;
       drawFrame(currentFrame);
     }
-
+    function suspend() {
+      cancelPending();
+      clearCache();
+      if (paintFrame) win.cancelAnimationFrame(paintFrame);
+      paintFrame = 0;
+      // Keep the one visible canvas bitmap, preventing a blank flash on return.
+    }
     resizeCanvas();
-
     if ("ResizeObserver" in win) {
-      var observer = new ResizeObserver(resizeCanvas);
-      observer.observe(canvas);
+      var resizeObserver = new ResizeObserver(resizeCanvas);
+      resizeObserver.observe(canvas);
       state.cleanups.push(function () {
-        observer.disconnect();
+        resizeObserver.disconnect();
       });
     } else {
-      listen(win, "resize", resizeCanvas, { passive: true });
+      onResizeSettled(resizeCanvas);
     }
-
-    loadFrame(0);
-    loadFrame(total - 1);
-
-    var idle =
-      win.requestIdleCallback ||
-      function (callback) {
-        return win.setTimeout(callback, 80);
+    if ("IntersectionObserver" in win) {
+      var visibilityObserver = new IntersectionObserver(
+        function (entries) {
+          nearViewport = entries[0].isIntersecting;
+          if (nearViewport) drawFrame(currentFrame);
+          else suspend();
+        },
+        { rootMargin: "25% 0px" },
+      );
+      visibilityObserver.observe(section);
+      state.cleanups.push(function () {
+        visibilityObserver.disconnect();
+      });
+    }
+    listen(doc, "visibilitychange", function () {
+      if (doc.hidden) suspend();
+      else drawFrame(currentFrame);
+    });
+    listen(win, "pagehide", suspend);
+    listen(win, "pageshow", function () {
+      drawFrame(currentFrame);
+    });
+    function stats() {
+      var bytes = 0;
+      cache.forEach(function (entry) {
+        bytes += entry.canvas.width * entry.canvas.height * 4;
+      });
+      return {
+        cachedFrames: cache.size,
+        frameLimit: cacheLimit,
+        inFlight: pending.size,
+        concurrency: concurrency,
+        cachedPixelBytes: bytes,
+        displayPixelBytes: canvas.width * canvas.height * 4,
+        maxPixels: maxPixels,
+        currentFrame: currentFrame,
+        displayedFrame: lastDrawn,
+        active: enabled(),
       };
-
-    var preloadQueue = [];
-    var preloadIndex = 0;
-    var batchSize = isMobileLike ? 4 : 10;
-
-    for (var frameIndex = step; frameIndex < total - 1; frameIndex += step) {
-      preloadQueue.push(frameIndex);
     }
-
-    function fillPreloadQueue() {
-      preloadQueue
-        .slice(preloadIndex, preloadIndex + batchSize)
-        .forEach(loadFrame);
-      preloadIndex += batchSize;
-
-      if (preloadIndex < preloadQueue.length) {
-        idle(fillPreloadQueue, { timeout: 350 });
-      }
+    if (cfg.debug === true) {
+      win.CLT_HOME_DEBUG = win.CLT_HOME_DEBUG || {};
+      win.CLT_HOME_DEBUG.hero = stats;
     }
-
-    fillPreloadQueue();
+    state.cleanups.push(function () {
+      disposed = true;
+      suspend();
+      canvas.width = canvas.height = 1;
+      if (win.CLT_HOME_DEBUG && win.CLT_HOME_DEBUG.hero === stats)
+        delete win.CLT_HOME_DEBUG.hero;
+    });
 
     var lines = queryAll(SELECTOR.heroLine, section);
     var cue = query(SELECTOR.heroCue, section);
+    var skip = query(SELECTOR.heroSkip, section);
 
-    if (reduced) {
+    // Skip intro ──
+    var SEEN_KEY = "clt-home-intro-seen";
+    var seen = false;
+    try {
+      seen = win.sessionStorage.getItem(SEEN_KEY) === "1";
+    } catch (_) {}
+    function markSeen() {
+      if (seen) return;
+      seen = true;
+      try {
+        win.sessionStorage.setItem(SEEN_KEY, "1");
+      } catch (_) {}
+    }
+    function introEnd() {
+      return Math.max(
+        0,
+        section.offsetTop + section.offsetHeight - win.innerHeight,
+      );
+    }
+    function jumpTo(target) {
+      var CLT = state.CLT;
+      if (CLT && typeof CLT.scrollTo === "function")
+        CLT.scrollTo(target, { immediate: true, force: true });
+      else if (typeof target === "number") win.scrollTo(0, target);
+      else target.scrollIntoView();
+      if (ScrollTrigger) ScrollTrigger.update();
+    }
+    if (skip) {
+      listen(skip, "click", function (event) {
+        var next = section.nextElementSibling;
+        if (!next) return;
+        event.preventDefault();
+        markSeen();
+        jumpTo(next);
+        if (!next.hasAttribute("tabindex")) next.setAttribute("tabindex", "-1");
+        win.setTimeout(function () {
+          try {
+            next.focus({ preventScroll: true });
+          } catch (_) {}
+        }, 150);
+      });
+    }
+    var openOnEnd = seen && !win.location.hash && getScrollPosition() < 10;
+
+    if (staticFrame) {
       drawFrame(0);
       gsap.set(lines, { autoAlpha: 1, y: 0 });
       if (cue) gsap.set(cue, { autoAlpha: 0 });
+      markSeen();
+      if (openOnEnd) jumpTo(introEnd());
       return;
     }
 
@@ -597,472 +840,929 @@ window.CLT_HERO_FRAMES = [
             autoAlpha: clamp(0, 1, 1 - self.progress * 6),
           });
         }
+        if (skip)
+          gsap.set(skip, {
+            autoAlpha: clamp(0, 1, (0.6 - self.progress) / 0.12),
+          });
+        if (self.progress > 0.97) markSeen();
       },
     });
+
+    if (openOnEnd) {
+      if (skip) gsap.set(skip, { autoAlpha: 0 });
+      jumpTo(introEnd());
+    }
   }
 
+  // ── Acclaim marquee ──────────────────────────────────────────────────────
   function initAcclaimMarquee() {
     var gsap = state.gsap;
-    var ScrollTrigger = state.ScrollTrigger;
     var clamp = gsap.utils.clamp;
-    var roots = queryAll(SELECTOR.marqueeRoot);
-
-    if (!roots.length) return;
-
     var reduced = state.reduced;
 
-    roots.forEach(function (root) {
-      var tracks = queryAll(SELECTOR.marqueeTrack, root);
-      if (!tracks.length) return;
+    queryAll(SELECTOR.marqueeRoot).forEach(function (root) {
+      var track = query(SELECTOR.marqueeTrack, root);
+      if (!track) return;
+      var sets = queryAll(SELECTOR.marqueeSet, track);
+      if (!sets.length) return;
 
-      if (tracks.length === 1) {
-        var clone = tracks[0].cloneNode(true);
-        clone.setAttribute("aria-hidden", "true");
-        root.appendChild(clone);
-        tracks = queryAll(SELECTOR.marqueeTrack, root);
+      function addSet() {
+        var copy = sets[0].cloneNode(true);
+        copy.setAttribute("aria-hidden", "true");
+        track.appendChild(copy);
+        sets.push(copy);
       }
+      if (sets.length === 1) addSet();
 
-      var firstTrack = tracks[0];
-      var loopWidth = 1;
-      var x = 0;
-      var baseSpeed = 34;
-      var direction = -1;
-      var targetDirection = -1;
-      var boost = 0;
-      var targetBoost = 0;
-      var active = true;
-      var paused = false;
+      gsap.set(track, { x: 0, animation: "none", force3D: true });
+      if (reduced) return;
+
+      var setX = gsap.quickSetter(track, "x", "px");
+      var loop = 1,
+        x = 0;
+      var baseSpeed = 34,
+        direction = -1,
+        targetDirection = -1,
+        boost = 0,
+        targetBoost = 0;
+      var visible = false,
+        hovered = false,
+        stopTick = null;
       var lastScroll = getScrollPosition();
 
-      gsap.set(tracks, {
-        x: 0,
-        animation: "none",
-        willChange: "transform",
-        force3D: true,
-      });
-
       function measure() {
-        loopWidth = Math.max(
-          1,
-          firstTrack.getBoundingClientRect().width ||
-            firstTrack.scrollWidth ||
-            1,
-        );
-
-        x = wrapNegativeX(x, loopWidth);
-        gsap.set(tracks, { x: x });
+        loop = Math.max(1, sets[1].offsetLeft - sets[0].offsetLeft);
+        while (
+          sets.length < 6 &&
+          sets.length * loop < root.clientWidth + loop * 2
+        )
+          addSet();
+        x = wrapNegativeX(x, loop);
+        setX(x);
       }
 
-      function setActive(value) {
-        active = value;
-        lastScroll = getScrollPosition();
-      }
-
-      measure();
-
-      if (ScrollTrigger) {
-        ScrollTrigger.create({
-          trigger: root,
-          start: "top bottom",
-          end: "bottom top",
-          onEnter: function () {
-            setActive(true);
-          },
-          onEnterBack: function () {
-            setActive(true);
-          },
-          onLeave: function () {
-            setActive(false);
-          },
-          onLeaveBack: function () {
-            setActive(false);
-          },
-        });
-
-        ScrollTrigger.addEventListener("refreshInit", measure);
-        state.cleanups.push(function () {
-          ScrollTrigger.removeEventListener("refreshInit", measure);
-        });
-      }
-
-      listen(
-        win,
-        "resize",
-        function () {
-          gsap.delayedCall(0.18, measure);
-        },
-        { passive: true },
-      );
-
-      listen(
-        root,
-        "pointerenter",
-        function () {
-          paused = true;
-        },
-        { passive: true },
-      );
-
-      listen(
-        root,
-        "pointerleave",
-        function () {
-          paused = false;
-          lastScroll = getScrollPosition();
-        },
-        { passive: true },
-      );
-
-      if (reduced) {
-        gsap.set(tracks, { x: 0, animation: "none", clearProps: "willChange" });
-        return;
-      }
-
-      addTick(function (_time, deltaMilliseconds) {
-        if (!active || paused) return;
-
-        var deltaSeconds = Math.min(
-          0.05,
-          Math.max(0.001, (deltaMilliseconds || 16.7) / 1000),
-        );
+      function tick(_time, deltaMs) {
+        var dt = Math.min(0.05, Math.max(0.001, (deltaMs || 16.7) / 1000));
         var scroll = getScrollPosition();
-        var scrollDelta = scroll - lastScroll;
+        var delta = scroll - lastScroll;
         lastScroll = scroll;
-
-        if (Math.abs(scrollDelta) > 0.08) {
-          targetDirection = scrollDelta > 0 ? -1 : 1;
-          targetBoost = clamp(
-            0,
-            220,
-            Math.abs(scrollDelta / deltaSeconds) * 0.12,
-          );
+        if (Math.abs(delta) > 0.08) {
+          targetDirection = delta > 0 ? -1 : 1;
+          targetBoost = clamp(0, 220, Math.abs(delta / dt) * 0.12);
         } else {
           targetBoost = 0;
         }
-
         direction += (targetDirection - direction) * 0.08;
         boost += (targetBoost - boost) * 0.12;
+        x = wrapNegativeX(x + direction * (baseSpeed + boost) * dt, loop);
+        setX(x);
+      }
 
-        var speed = baseSpeed + boost;
-        x = wrapNegativeX(x + direction * speed * deltaSeconds, loopWidth);
+      function sync() {
+        var run = visible && !hovered;
+        if (run && !stopTick) {
+          lastScroll = getScrollPosition();
+          stopTick = addTick(tick);
+        } else if (!run && stopTick) {
+          stopTick();
+          stopTick = null;
+        }
+      }
 
-        gsap.set(tracks, { x: x });
+      measure();
+      onResizeSettled(measure);
+      if (state.ScrollTrigger) {
+        state.ScrollTrigger.addEventListener("refreshInit", measure);
+      }
+      observeVisibility(root, "10% 0px", function (isVisible) {
+        visible = isVisible;
+        sync();
       });
+      listen(
+        root,
+        "pointerenter",
+        function (e) {
+          if (e.pointerType !== "mouse") return;
+          hovered = true;
+          sync();
+        },
+        { passive: true },
+      );
+      listen(
+        root,
+        "pointerleave",
+        function (e) {
+          if (e.pointerType !== "mouse") return;
+          hovered = false;
+          sync();
+        },
+        { passive: true },
+      );
     });
   }
 
-  function initPosterArchive() {
+  // ── Show — the upcoming production ───────────────────────────────────────
+  function initShow() {
     var gsap = state.gsap;
     var ScrollTrigger = state.ScrollTrigger;
-    var Draggable = state.Draggable;
-    var clamp = gsap.utils.clamp;
-    var viewport = query(SELECTOR.pastViewport);
-    var track = query(SELECTOR.pastTrack, viewport || doc);
-
-    if (!viewport || !track) return;
-
+    var section = query(SELECTOR.show);
+    if (!section) return;
     var reduced = state.reduced;
-    var originals = queryAll(SELECTOR.pastItem, track).filter(function (item) {
-      return item.dataset.clone !== "true";
+
+    var now = new Date();
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var dated = queryAll("[data-date]", section);
+    var upcoming = dated.filter(function (item) {
+      var parts = (item.getAttribute("data-date") || "").split("-").map(Number);
+      if (parts.length !== 3 || !parts[0]) return true;
+      item.__cltDate = new Date(parts[0], parts[1] - 1, parts[2]);
+      var past = item.__cltDate < today;
+      item.classList.toggle("is-past", past);
+      if (past) item.setAttribute("aria-hidden", "true");
+      return !past;
     });
-
-    if (originals.length < 2) return;
-
-    if (track.dataset.clonesReady !== "true") {
-      originals.forEach(function (item) {
-        var clone = item.cloneNode(true);
-        clone.dataset.clone = "true";
-        clone.setAttribute("aria-hidden", "true");
-        clone.removeAttribute("data-reveal");
-        clone.removeAttribute("id");
-        track.appendChild(clone);
-      });
-      track.dataset.clonesReady = "true";
+    var countdown = query("[data-home-countdown]", section);
+    var closed = query("[data-home-closed]", section);
+    if (upcoming.length) {
+      var next = upcoming[0];
+      next.classList.add("is-next");
+      if (countdown && next.__cltDate) {
+        var days = Math.round((next.__cltDate - today) / 864e5);
+        countdown.textContent =
+          days === 0
+            ? "Performing today"
+            : days === 1
+              ? "Next performance tomorrow"
+              : "Next performance in " + days + " days";
+        countdown.hidden = false;
+      }
+    } else if (dated.length) {
+      section.classList.add("is-closed");
+      if (closed) closed.hidden = false;
     }
 
-    var items = queryAll(SELECTOR.pastItem, track);
-    var posters = queryAll(SELECTOR.pastPoster, track);
-    var setWidth = 1;
-    var velocity = 0;
-    var dragging = false;
-    var paused = false;
-    var active = true;
-    var momentumTween = null;
-    var draggable = null;
-    var previousScroll = getScrollPosition();
+    var poster = query(SELECTOR.showPoster, section);
+    var frame = poster && query(".home-show__frame", poster);
+    var details = queryAll(".home-show__details > *:not([hidden])", section);
 
-    gsap.set(viewport, {
-      overflow: "hidden",
-      touchAction: "pan-y",
+    if (reduced || !ScrollTrigger || !frame) return;
+    gsap.set(frame, {
+      autoAlpha: 0,
+      yPercent: 14,
+      rotationX: 16,
+      transformOrigin: "50% 100%",
     });
-
-    // No persistent will-change here: promoting every poster + clone to its own GPU
-    // layer at rest is a memory/jank cost. (clt-master.css also neutralizes any baked
-    // will-change globally; see the perf override there.)
-    gsap.set(track, {
-      x: 0,
-      overflow: "visible",
-      scrollSnapType: "none",
-      force3D: true,
-    });
-
-    gsap.set(items, {
-      force3D: true,
-    });
-
-    gsap.set(posters, {
-      transformOrigin: "50% 50%",
-      force3D: true,
-    });
-
-    function setTrackX(value) {
-      gsap.set(track, { x: wrapNegativeX(value, setWidth) });
-    }
-
-    function measure() {
-      setWidth = Math.max(1, track.scrollWidth / 2);
-      setTrackX(Number(gsap.getProperty(track, "x")) || 0);
-    }
-
-    function isDragging() {
-      return dragging || Boolean(draggable && draggable.isDragging);
-    }
-
-    function setPaused(value) {
-      paused = value;
-      viewport.classList.toggle("is-paused", paused || dragging);
-      previousScroll = getScrollPosition();
-    }
-
-    function releaseMomentum() {
-      var startX = Number(gsap.getProperty(track, "x")) || 0;
-      var distance = velocity * 0.42;
-      var duration = clamp(0.42, 1.65, Math.abs(velocity) / 820);
-      var proxy = { progress: 0 };
-
-      if (momentumTween) momentumTween.kill();
-      if (Math.abs(velocity) < 35) return;
-
-      momentumTween = gsap.to(proxy, {
-        progress: 1,
-        duration: duration,
-        ease: "power3.out",
-        onUpdate: function () {
-          setTrackX(startX + distance * proxy.progress);
-        },
-        onComplete: function () {
-          velocity = 0;
-          if (draggable && typeof draggable.update === "function") {
-            draggable.update();
-          }
-        },
-      });
-    }
-
-    function pressStart() {
-      dragging = true;
-      viewport.classList.add("is-dragging");
-      if (momentumTween) momentumTween.kill();
-    }
-
-    function pressEnd() {
-      dragging = false;
-      viewport.classList.remove("is-dragging");
-      previousScroll = getScrollPosition();
-    }
-
-    // Poster items are CSS-sized (fixed clamp width + 2/3 aspect-ratio), so
-    // track.scrollWidth is correct at init regardless of image load — no media-
-    // ready re-measure needed. (Layout shifts are handled by refreshAfterLayoutSettles
-    // and the refreshInit listener below; a per-image ScrollTrigger.refresh() here
-    // fired mid-scroll and corrupted clt-core's batched reveals + the zoom scrub.)
-    measure();
-
-    if (ScrollTrigger) {
-      ScrollTrigger.create({
-        trigger: viewport,
-        start: "top bottom",
-        end: "bottom top",
-        onEnter: function () {
-          active = true;
-          previousScroll = getScrollPosition();
-        },
-        onEnterBack: function () {
-          active = true;
-          previousScroll = getScrollPosition();
-        },
-        onLeave: function () {
-          active = false;
-        },
-        onLeaveBack: function () {
-          active = false;
-        },
-      });
-
-      ScrollTrigger.addEventListener("refreshInit", measure);
-      state.cleanups.push(function () {
-        ScrollTrigger.removeEventListener("refreshInit", measure);
-      });
-    }
-
-    listen(
-      win,
-      "resize",
-      function () {
-        gsap.delayedCall(0.18, measure);
-      },
-      { passive: true },
-    );
-
-    listen(viewport, "pointerenter", function () {
-      setPaused(true);
-    });
-
-    listen(viewport, "pointerleave", function () {
-      setPaused(false);
-    });
-
-    listen(viewport, "focusin", function () {
-      setPaused(true);
-    });
-
-    listen(viewport, "focusout", function () {
-      setPaused(false);
-    });
-
-    if (Draggable) {
-      draggable = Draggable.create(track, {
-        type: "x",
-        trigger: viewport,
-        inertia: false,
-        allowContextMenu: true,
-        allowNativeTouchScrolling: true,
-        dragClickables: true,
-        onPress: function () {
-          pressStart();
-          // The auto-scroll ticker also writes track.x via gsap.set, so Draggable's
-          // internal x is stale between drags. Resync it to the live transform here,
-          // otherwise the track snaps back to Draggable's last-known x on press.
-          if (typeof this.update === "function") this.update();
-          this._cltLastX = this.x;
-          this._cltLastTime = performance.now();
-          velocity = 0;
-        },
-        onDrag: function () {
-          var now = performance.now();
-          var deltaX = this.x - this._cltLastX;
-          var deltaTime = Math.max(16, now - this._cltLastTime);
-          velocity = (deltaX / deltaTime) * 1000;
-          this._cltLastX = this.x;
-          this._cltLastTime = now;
-
-          var wrapped = wrapNegativeX(this.x, setWidth);
-          if (Math.abs(wrapped - this.x) > 0.1) {
-            gsap.set(track, { x: wrapped });
-            this.x = wrapped;
-            this.update();
-            this._cltLastX = wrapped;
-          }
-        },
-        onRelease: pressEnd,
-        onDragEnd: releaseMomentum,
-      })[0];
-
-      state.cleanups.push(function () {
-        if (draggable && typeof draggable.kill === "function") draggable.kill();
-      });
-    } else {
-      initPointerDragFallback(
-        viewport,
-        track,
-        null,
-        setTrackX,
-        isDragging,
-        function (nextVelocity) {
-          velocity = nextVelocity;
-        },
-        releaseMomentum,
-        pressStart,
-        pressEnd,
-      );
-    }
-
-    items.forEach(function (item) {
-      var poster = query(".clt-poster", item);
-      if (!poster) return;
-
-      var hover = gsap.timeline({
-        paused: true,
-        defaults: { ease: "power3.out", overwrite: "auto" },
-      });
-
-      hover
-        .to(
-          item,
-          {
-            y: -8,
-            filter: "brightness(1.08)",
-            duration: reduced ? 0.01 : 0.34,
+    gsap.set(details, { autoAlpha: 0, y: 18 });
+    var foot = query(".home-show__footlight", section);
+    if (foot) gsap.set(foot, { scaleX: 0.2, autoAlpha: 0 });
+    ScrollTrigger.create({
+      trigger: section.querySelector(".home-show__grid") || section,
+      start: "top 78%",
+      once: true,
+      onEnter: function () {
+        var tl = gsap.timeline({
+          defaults: {
+            ease:
+              (state.CLT.motion && state.CLT.motion.easeStage) || "expo.out",
           },
-          0,
-        )
-        .to(
-          poster,
+        });
+        tl.to(
+          frame,
           {
-            scaleX: 1.045,
-            scaleY: 1.045,
-            filter: "saturate(1.12) contrast(1.05)",
-            duration: reduced ? 0.01 : 0.56,
-            ease: "power2.out",
+            autoAlpha: 1,
+            yPercent: 0,
+            rotationX: 0,
+            duration: 1.25,
+            clearProps: "opacity,visibility",
+            onComplete: function () {
+              gsap.set(frame, { transformOrigin: "50% 50%" });
+            },
           },
           0,
         );
-
-      listen(item, "pointerenter", function () {
-        if (isDragging()) return;
-        hover.timeScale(1).play();
-      });
-
-      listen(item, "pointerleave", function () {
-        hover.timeScale(1.35).reverse();
-      });
+        if (foot) tl.to(foot, { scaleX: 1, autoAlpha: 1, duration: 1.1 }, 0.25);
+        tl.to(
+          details,
+          {
+            autoAlpha: 1,
+            y: 0,
+            duration: 0.8,
+            stagger: 0.06,
+            clearProps: "transform,opacity,visibility",
+          },
+          0.15,
+        );
+      },
     });
+  }
 
-    if (reduced) return;
+  // ── Archive — person cards on a drifting rail ────────────────────────────
+  function initArchive() {
+    var gsap = state.gsap;
+    var ScrollTrigger = state.ScrollTrigger;
+    var section = query(SELECTOR.archive);
+    var rail = section && query("[data-archive-rail]", section);
+    if (!rail) return;
+    var originals = queryAll(".home-archive__item", rail);
+    if (!originals.length) return;
+    var reduced = state.reduced;
+    var prev = query("[data-archive-prev]", section);
+    var next = query("[data-archive-next]", section);
+    var toggle = query("[data-archive-toggle]", section);
+    var meter = query(".home-archive__meter", section);
 
-    addTick(function (_time, deltaMilliseconds) {
-      if (
-        !active ||
-        paused ||
-        isDragging() ||
-        (momentumTween && momentumTween.isActive())
-      ) {
+    var canLoop = originals.length > 2 && !reduced;
+    if (canLoop) {
+      originals.concat(originals).forEach(function (item) {
+        var clone = item.cloneNode(true);
+        clone.setAttribute("aria-hidden", "true");
+        clone.dataset.clone = "true";
+        prepareLoopClone(clone);
+        queryAll("[data-open-dialog]", clone).forEach(function (el) {
+          el.removeAttribute("data-open-dialog");
+        });
+        rail.appendChild(clone);
+      });
+    }
+    var items = queryAll(".home-archive__item", rail);
+    var centers = [],
+      lastLit = [],
+      half = 0,
+      pitch = 1,
+      setWidth = 0,
+      frame = 0;
+
+    function measure() {
+      half = rail.clientWidth / 2;
+      centers = items.map(function (item) {
+        return item.offsetLeft + item.offsetWidth / 2;
+      });
+      pitch = items[1]
+        ? items[1].offsetLeft - items[0].offsetLeft
+        : items[0].offsetWidth || 1;
+      setWidth = canLoop
+        ? items[originals.length].offsetLeft - items[0].offsetLeft
+        : 0;
+      update();
+    }
+    function startLeft() {
+      return centers[0] - half + setWidth;
+    }
+    function wrap() {
+      if (!setWidth) return;
+      var start = startLeft();
+      if (rail.scrollLeft >= start + setWidth) rail.scrollLeft -= setWidth;
+      else if (rail.scrollLeft < start - 1) rail.scrollLeft += setWidth;
+    }
+    function update() {
+      frame = 0;
+      var mid = rail.scrollLeft + half;
+      for (var i = 0; i < items.length; i++) {
+        var lit = Math.max(0, 1 - (Math.abs(centers[i] - mid) / pitch) * 0.9);
+        lit = Math.round(lit * 100) / 100;
+        if (lit !== lastLit[i]) {
+          items[i].style.setProperty("--lit", lit);
+          lastLit[i] = lit;
+        }
+      }
+      var span = setWidth || rail.scrollWidth - rail.clientWidth;
+      var offset = rail.scrollLeft - (centers[0] - half);
+      if (meter)
+        meter.style.setProperty(
+          "--progress",
+          span > 0
+            ? ((((offset % span) + span) % span) / span).toFixed(3)
+            : "0",
+        );
+      if (!canLoop) {
+        if (prev) prev.disabled = rail.scrollLeft <= 4;
+        if (next)
+          next.disabled =
+            rail.scrollLeft >= rail.scrollWidth - rail.clientWidth - 4;
+      }
+    }
+    function nearest(left) {
+      var mid = (typeof left === "number" ? left : rail.scrollLeft) + half,
+        best = 0,
+        dist = Infinity;
+      centers.forEach(function (c, i) {
+        var d = Math.abs(c - mid);
+        if (d < dist) {
+          dist = d;
+          best = i;
+        }
+      });
+      return best;
+    }
+    function goTo(index) {
+      if (canLoop) wrap();
+      index = Math.max(0, Math.min(items.length - 1, index));
+      rail.scrollTo({
+        left: centers[index] - half,
+        behavior: reduced ? "auto" : "smooth",
+      });
+    }
+
+    var speed = 26;
+    var visible = false,
+      hovered = false,
+      focused = false,
+      stopped = false,
+      busy = false;
+    var resumeAt = 0,
+      stopTick = null,
+      written = null,
+      position = 0,
+      idleTimer = 0;
+    function driftAllowed() {
+      return (
+        canLoop &&
+        visible &&
+        !hovered &&
+        !focused &&
+        !stopped &&
+        !busy &&
+        !doc.hidden &&
+        performance.now() >= resumeAt
+      );
+    }
+    function tick(_time, deltaMs) {
+      if (!driftAllowed()) {
+        syncDrift();
         return;
       }
-
-      var deltaSeconds = Math.min(
-        0.05,
-        Math.max(0.001, (deltaMilliseconds || 16.7) / 1000),
-      );
-      var scroll = getScrollPosition();
-      var scrollDelta = scroll - previousScroll;
-      previousScroll = scroll;
-
-      var currentX = Number(gsap.getProperty(track, "x")) || 0;
-      var autoStep = -30 * deltaSeconds;
-      var scrollPush = clamp(-22, 22, scrollDelta * -0.24);
-      setTrackX(currentX + autoStep + scrollPush);
-
-      if (draggable && typeof draggable.update === "function") {
-        draggable.update();
+      position += speed * Math.min(0.05, (deltaMs || 16.7) / 1000);
+      if (position >= startLeft() + setWidth) position -= setWidth;
+      rail.scrollLeft = position;
+      written = rail.scrollLeft;
+    }
+    function syncDrift() {
+      win.clearTimeout(idleTimer);
+      var run = driftAllowed();
+      rail.classList.toggle("is-drifting", run);
+      if (run && !stopTick) {
+        position = rail.scrollLeft;
+        stopTick = addTick(tick);
+      } else if (!run && stopTick) {
+        stopTick();
+        stopTick = null;
       }
+      if (!run && canLoop && !stopped) {
+        var wait = resumeAt - performance.now();
+        if (wait > 0) idleTimer = win.setTimeout(syncDrift, wait + 20);
+      }
+    }
+    function interact() {
+      resumeAt = performance.now() + 3200;
+      syncDrift();
+    }
+
+    listen(
+      rail,
+      "scroll",
+      function () {
+        if (written !== null && Math.abs(rail.scrollLeft - written) < 1) {
+        } else {
+          written = null;
+          if (!stopTick) interact();
+        }
+        if (!frame) frame = win.requestAnimationFrame(update);
+      },
+      { passive: true },
+    );
+    listen(rail, "scrollend", function () {
+      if (canLoop && !stopTick) {
+        wrap();
+      }
+    });
+    listen(
+      section,
+      "pointerenter",
+      function (e) {
+        if (e.pointerType === "mouse") {
+          hovered = true;
+          syncDrift();
+        }
+      },
+      { passive: true },
+    );
+    listen(
+      section,
+      "pointerleave",
+      function (e) {
+        if (e.pointerType === "mouse") {
+          hovered = false;
+          interact();
+        }
+      },
+      { passive: true },
+    );
+    listen(
+      rail,
+      "touchstart",
+      function () {
+        busy = true;
+        syncDrift();
+      },
+      { passive: true },
+    );
+    listen(
+      rail,
+      "touchend",
+      function () {
+        busy = false;
+        interact();
+      },
+      { passive: true },
+    );
+    listen(rail, "wheel", interact, { passive: true });
+    listen(section, "focusin", function () {
+      focused = true;
+      syncDrift();
+    });
+    listen(section, "focusout", function (e) {
+      focused = Boolean(e.relatedTarget && section.contains(e.relatedTarget));
+      interact();
+    });
+    if (prev)
+      listen(prev, "click", function () {
+        interact();
+        goTo(nearest() - 1);
+      });
+    if (next)
+      listen(next, "click", function () {
+        interact();
+        goTo(nearest() + 1);
+      });
+    if (toggle) {
+      if (!canLoop) toggle.hidden = true;
+      listen(toggle, "click", function () {
+        stopped = !stopped;
+        toggle.textContent = stopped ? "Play" : "Pause";
+        toggle.setAttribute("aria-pressed", String(stopped));
+        toggle.setAttribute(
+          "aria-label",
+          (stopped ? "Resume" : "Pause") + " the archive's automatic scrolling",
+        );
+        resumeAt = 0;
+        syncDrift();
+      });
+    }
+    listen(rail, "keydown", function (e) {
+      if (e.target !== rail) return;
+      var map = { ArrowLeft: -1, ArrowRight: 1 };
+      if (e.key in map) {
+        e.preventDefault();
+        interact();
+        goTo(nearest() + map[e.key]);
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        interact();
+        goTo(canLoop ? originals.length : 0);
+      } else if (e.key === "End") {
+        e.preventDefault();
+        interact();
+        goTo((canLoop ? originals.length : 0) + originals.length - 1);
+      }
+    });
+    listen(doc, "visibilitychange", syncDrift);
+    observeVisibility(rail, "0px", function (isVisible) {
+      visible = isVisible;
+      syncDrift();
+    });
+    if ("ResizeObserver" in win) {
+      var ro = new ResizeObserver(measure);
+      ro.observe(rail);
+      state.cleanups.push(function () {
+        ro.disconnect();
+      });
+    } else onResizeSettled(measure);
+    measure();
+    if (canLoop) rail.scrollLeft = startLeft();
+
+    if (win.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+      var pointer = null,
+        startX = 0,
+        dragFrom = 0,
+        dragging = false;
+      var lastX = 0,
+        lastT = 0,
+        velocity = 0,
+        settle = null;
+      function release() {
+        var here = nearest();
+        var projected = rail.scrollLeft - (reduced ? 0 : velocity * 0.28);
+        var index = Math.max(here - 2, Math.min(here + 2, nearest(projected)));
+        var target = centers[index] - half;
+        if (settle) settle.kill();
+        settle = gsap.to(rail, {
+          scrollLeft: target,
+          duration: reduced
+            ? 0.01
+            : Math.min(0.9, 0.35 + Math.abs(target - rail.scrollLeft) / 1600),
+          ease: "power3.out",
+          onComplete: function () {
+            rail.classList.remove("is-dragging");
+            settle = null;
+            busy = false;
+            if (canLoop) wrap();
+            interact();
+          },
+        });
+      }
+      listen(rail, "pointerdown", function (e) {
+        if (e.pointerType !== "mouse" || e.button !== 0) return;
+        if (settle) {
+          settle.kill();
+          settle = null;
+        }
+        pointer = e.pointerId;
+        dragging = false;
+        busy = true;
+        syncDrift();
+        startX = lastX = e.clientX;
+        dragFrom = rail.scrollLeft;
+        lastT = performance.now();
+        velocity = 0;
+      });
+      listen(
+        win,
+        "pointermove",
+        function (e) {
+          if (e.pointerId !== pointer) return;
+          var dx = e.clientX - startX;
+          if (!dragging) {
+            if (Math.abs(dx) < 6) return;
+            dragging = true;
+            rail.classList.add("is-dragging");
+            try {
+              rail.setPointerCapture(pointer);
+            } catch (_) {}
+          }
+          var now = performance.now();
+          velocity = ((e.clientX - lastX) / Math.max(8, now - lastT)) * 1000;
+          lastX = e.clientX;
+          lastT = now;
+          rail.scrollLeft = dragFrom - dx;
+          written = rail.scrollLeft;
+        },
+        { passive: true },
+      );
+      function end(e) {
+        if (e.pointerId !== pointer) return;
+        pointer = null;
+        if (!dragging) {
+          busy = false;
+          interact();
+          return;
+        }
+        if (performance.now() - lastT > 90) velocity = 0;
+        release();
+      }
+      listen(win, "pointerup", end);
+      listen(win, "pointercancel", end);
+      listen(rail, "dragstart", function (e) {
+        e.preventDefault();
+      });
+    }
+
+    var dialog = doc.getElementById("dlgArchive");
+    if (dialog) {
+      var dImg = query("[data-archive-dialog-img]", dialog);
+      var dTitle = query("[data-archive-dialog-title]", dialog);
+      var dMeta = query("[data-archive-dialog-meta]", dialog);
+      var fill = function (link) {
+        var card = link.closest(".home-archive__card");
+        var img = query("img", link);
+        var title = card && query(".clt-person-card__name", card);
+        var meta = card
+          ? queryAll(
+              ".clt-person-card__role, .clt-person-card__line",
+              card,
+            ).map(function (n) {
+              return n.textContent.trim();
+            })
+          : [];
+        if (dImg) {
+          dImg.src = link.getAttribute("href") || (img && img.currentSrc) || "";
+          dImg.alt = img ? img.alt : "";
+        }
+        if (dTitle) dTitle.textContent = title ? title.textContent.trim() : "";
+        if (dMeta) dMeta.textContent = meta.join(" · ");
+      };
+      var openFrom = function (link) {
+        fill(link);
+        if (!link.hasAttribute("data-open-dialog") && state.CLT.dialogs)
+          state.CLT.dialogs.open(dialog);
+      };
+      listen(
+        win,
+        "click",
+        function (e) {
+          var link =
+            e.target.closest && e.target.closest("[data-archive-open]");
+          if (!link || !rail.contains(link)) return;
+          if (!link.hasAttribute("data-open-dialog")) e.preventDefault();
+          openFrom(link);
+        },
+        true,
+      );
+      listen(
+        win,
+        "keydown",
+        function (e) {
+          if (e.key !== "Enter" && e.key !== " ") return;
+          var link =
+            e.target.closest && e.target.closest("[data-archive-open]");
+          if (link && rail.contains(link)) fill(link);
+        },
+        true,
+      );
+    }
+
+    if (reduced || !ScrollTrigger) return;
+    gsap.set(items, { "--ignite": 0, autoAlpha: 0, y: 40 });
+    ScrollTrigger.create({
+      trigger: rail,
+      start: "top 82%",
+      once: true,
+      onEnter: function () {
+        gsap.to(items, {
+          autoAlpha: 1,
+          y: 0,
+          duration: 0.9,
+          stagger: 0.08,
+          ease: "power3.out",
+          clearProps: "transform,opacity,visibility",
+        });
+        gsap.to(items, {
+          keyframes: { "--ignite": [0, 0.75, 0.2, 0.9, 0.45, 1] },
+          duration: 0.9,
+          ease: "none",
+          stagger: 0.12,
+          delay: 0.25,
+        });
+      },
+    });
+  }
+
+  function initNativeRail(viewport, track, label) {
+    viewport.classList.add("clt-home-native-scroll");
+    track.classList.add("clt-home-native-track");
+    Object.assign(viewport.style, {
+      overflowX: "auto",
+      overflowY: "hidden",
+      touchAction: "auto",
+      transform: "none",
+      maskImage: "none",
+      webkitMaskImage: "none",
+    });
+    Object.assign(track.style, {
+      display: "flex",
+      flexWrap: "nowrap",
+      width: "max-content",
+      transform: "none",
+      translate: "none",
+      touchAction: "auto",
+      willChange: "auto",
+      transition: "none",
+    });
+    queryAll('[data-clone="true"]', track).forEach(function (clone) {
+      clone.remove();
+    });
+    delete track.dataset.clonesReady;
+    if (!viewport.hasAttribute("tabindex")) viewport.tabIndex = 0;
+    if (!viewport.hasAttribute("role")) viewport.setAttribute("role", "region");
+    if (
+      !viewport.hasAttribute("aria-label") &&
+      !viewport.hasAttribute("aria-labelledby")
+    ) {
+      viewport.setAttribute("aria-label", label);
+    }
+    queryAll("img", track).forEach(function (image) {
+      image.decoding = "async";
+      if (!image.hasAttribute("loading")) image.loading = "lazy";
+      image.draggable = false;
+    });
+  }
+
+  function initNativeAutoScroll(viewport, track) {
+    var motion = win.matchMedia("(prefers-reduced-motion: reduce)");
+    var originals = Array.prototype.slice.call(track.children);
+    if (motion.matches || originals.length < 2) return;
+    var clones = originals.map(function (item) {
+      var clone = item.cloneNode(true);
+      clone.dataset.clone = "true";
+      clone.setAttribute("aria-hidden", "true");
+      prepareLoopClone(clone);
+      queryAll("img", clone).forEach(function (img) {
+        img.loading = "lazy";
+        img.decoding = "async";
+      });
+      track.appendChild(clone);
+      return clone;
+    });
+    var button = doc.createElement("button");
+    button.type = "button";
+    button.className = "clt-home-auto-toggle";
+    button.textContent = "Pause auto-scroll";
+    button.setAttribute("aria-label", "Pause Explore automatic scrolling");
+    button.setAttribute("aria-pressed", "false");
+    viewport.insertAdjacentElement("afterend", button);
+    var pitch = 0,
+      frame = 0,
+      timer = 0,
+      previous = null,
+      position = viewport.scrollLeft;
+    var written = null,
+      touching = false,
+      mouseDown = false,
+      focused = false;
+    var paused = false,
+      visible = false,
+      away = false,
+      destroyed = false;
+    var resumeAt = performance.now() + 1200;
+    var configuredSpeed = Number((win.CLT_HOME_CONFIG || {}).exploreAutoSpeed);
+    var speed =
+      Number.isFinite(configuredSpeed) && configuredSpeed > 0
+        ? Math.max(8, Math.min(50, configuredSpeed))
+        : 24;
+    function stop() {
+      if (frame) win.cancelAnimationFrame(frame);
+      win.clearTimeout(timer);
+      frame = timer = 0;
+      previous = null;
+    }
+    function allowed() {
+      return (
+        !destroyed &&
+        !paused &&
+        !motion.matches &&
+        visible &&
+        !away &&
+        !doc.hidden &&
+        !touching &&
+        !mouseDown &&
+        !focused &&
+        pitch > 0 &&
+        viewport.scrollWidth - viewport.clientWidth >= pitch
+      );
+    }
+    function write(value) {
+      viewport.scrollLeft = value;
+      written = viewport.scrollLeft;
+    }
+    function tick(now) {
+      frame = 0;
+      if (!allowed()) {
+        stop();
+        return;
+      }
+      var dt = previous === null ? 0 : Math.min(0.05, (now - previous) / 1000);
+      previous = now;
+      position = (position + speed * dt) % pitch;
+      write(position);
+      frame = win.requestAnimationFrame(tick);
+    }
+    function sync() {
+      stop();
+      if (!allowed()) return;
+      var wait = resumeAt - performance.now();
+      if (wait > 0) {
+        timer = win.setTimeout(sync, wait + 1);
+        return;
+      }
+      position = ((viewport.scrollLeft % pitch) + pitch) % pitch;
+      write(position);
+      frame = win.requestAnimationFrame(tick);
+    }
+    function interaction() {
+      resumeAt = performance.now() + 3000;
+      sync();
+    }
+    function measure() {
+      pitch = clones[0].offsetLeft - originals[0].offsetLeft;
+      button.hidden = !(
+        pitch > 0 && viewport.scrollWidth - viewport.clientWidth >= pitch
+      );
+      interaction();
+    }
+    listen(
+      viewport,
+      "touchstart",
+      function () {
+        touching = true;
+        interaction();
+      },
+      { passive: true },
+    );
+    function endTouch(event) {
+      touching = event.touches.length > 0;
+      interaction();
+    }
+    listen(win, "touchend", endTouch, { passive: true });
+    listen(win, "touchcancel", endTouch, { passive: true });
+    listen(
+      viewport,
+      "pointerdown",
+      function (event) {
+        if (event.pointerType === "touch") return;
+        mouseDown = true;
+        interaction();
+      },
+      { passive: true },
+    );
+    function endPointer(event) {
+      if (event.pointerType === "touch") return;
+      mouseDown = false;
+      interaction();
+    }
+    listen(win, "pointerup", endPointer, { passive: true });
+    listen(win, "pointercancel", endPointer, { passive: true });
+    listen(viewport, "wheel", interaction, { passive: true });
+    listen(viewport, "focusin", function () {
+      focused = true;
+      interaction();
+    });
+    listen(viewport, "focusout", function (event) {
+      focused = Boolean(
+        event.relatedTarget && viewport.contains(event.relatedTarget),
+      );
+      interaction();
+    });
+    listen(
+      viewport,
+      "scroll",
+      function () {
+        if (written !== null && Math.abs(viewport.scrollLeft - written) < 0.5)
+          return;
+        written = null;
+        interaction();
+      },
+      { passive: true },
+    );
+    listen(button, "click", function () {
+      paused = !paused;
+      button.textContent = paused ? "Resume auto-scroll" : "Pause auto-scroll";
+      button.setAttribute(
+        "aria-label",
+        (paused ? "Resume" : "Pause") + " Explore automatic scrolling",
+      );
+      button.setAttribute("aria-pressed", String(paused));
+      resumeAt = performance.now();
+      sync();
+    });
+    listen(doc, "visibilitychange", interaction);
+    listen(win, "blur", function () {
+      touching = mouseDown = false;
+      interaction();
+    });
+    listen(win, "pagehide", function () {
+      away = true;
+      stop();
+    });
+    listen(win, "pageshow", function () {
+      away = false;
+      interaction();
+    });
+    if (motion.addEventListener) listen(motion, "change", sync);
+    if ("IntersectionObserver" in win) {
+      var observer = new IntersectionObserver(function (entries) {
+        visible = entries[0].isIntersecting;
+        sync();
+      });
+      observer.observe(viewport);
+      state.cleanups.push(function () {
+        observer.disconnect();
+      });
+    } else {
+      visible = true;
+    }
+    if ("ResizeObserver" in win) {
+      var resizeObserver = new ResizeObserver(measure);
+      resizeObserver.observe(viewport);
+      resizeObserver.observe(track);
+      state.cleanups.push(function () {
+        resizeObserver.disconnect();
+      });
+    } else {
+      onResizeSettled(measure);
+    }
+    measure();
+    state.cleanups.push(function () {
+      destroyed = true;
+      stop();
+      clones.forEach(function (clone) {
+        clone.remove();
+      });
+      button.remove();
     });
   }
 
   function initExploreCarousel() {
     var gsap = state.gsap;
     var ScrollTrigger = state.ScrollTrigger;
-    var Draggable = state.Draggable;
     var clamp = gsap.utils.clamp;
     var section = query(SELECTOR.exploreSection);
     var mask = query(SELECTOR.exploreMask, section);
@@ -1072,6 +1772,12 @@ window.CLT_HERO_FRAMES = [
 
     var reduced = state.reduced;
     var isTouch = win.matchMedia("(hover: none), (pointer: coarse)").matches;
+    if (isTouch) {
+      initNativeRail(mask, track, "Explore");
+      initNativeAutoScroll(mask, track);
+      return;
+    }
+    mask.style.overflow = "hidden";
 
     var originals = queryAll(SELECTOR.exploreCard, track).filter(
       function (card) {
@@ -1086,10 +1792,11 @@ window.CLT_HERO_FRAMES = [
         var clone = card.cloneNode(true);
         clone.dataset.clone = "true";
         clone.setAttribute("aria-hidden", "true");
-        // Eager-load cloned imagery so the looped half never flashes blank.
+        prepareLoopClone(clone);
         var cloneImgs = clone.querySelectorAll("img");
         for (var ci = 0; ci < cloneImgs.length; ci++) {
-          cloneImgs[ci].setAttribute("loading", "eager");
+          cloneImgs[ci].setAttribute("loading", "lazy");
+          cloneImgs[ci].setAttribute("decoding", "async");
         }
         track.appendChild(clone);
       });
@@ -1101,22 +1808,26 @@ window.CLT_HERO_FRAMES = [
     var setWidth = 1;
     var momentumTween = null;
     var dragging = false;
-    var draggable = null;
     var velocity = 0;
 
     function measure() {
-      setWidth = Math.max(1, track.scrollWidth / 2);
+      var firstClone = track.querySelector('[data-clone="true"]');
+      setWidth = Math.max(
+        1,
+        firstClone
+          ? firstClone.offsetLeft - originals[0].offsetLeft
+          : track.scrollWidth / 2,
+      );
       setTrackX(Number(gsap.getProperty(track, "x")) || 0);
     }
 
+    var writeTrackX = gsap.quickSetter(track, "x", "px");
     function setTrackX(value) {
-      gsap.set(track, {
-        x: wrapNegativeX(value, setWidth),
-      });
+      writeTrackX(wrapNegativeX(value, setWidth));
     }
 
     function isDragging() {
-      return dragging || Boolean(draggable && draggable.isDragging);
+      return dragging;
     }
 
     function releaseMomentum() {
@@ -1126,6 +1837,7 @@ window.CLT_HERO_FRAMES = [
       var proxy = { progress: 0 };
 
       if (momentumTween) momentumTween.kill();
+      if (reduced || Math.abs(velocity) < 35) return;
 
       momentumTween = gsap.to(proxy, {
         progress: 1,
@@ -1133,11 +1845,6 @@ window.CLT_HERO_FRAMES = [
         ease: "power3.out",
         onUpdate: function () {
           setTrackX(startX + distance * proxy.progress);
-        },
-        onComplete: function () {
-          if (draggable && typeof draggable.update === "function") {
-            draggable.update();
-          }
         },
       });
     }
@@ -1151,111 +1858,91 @@ window.CLT_HERO_FRAMES = [
       });
     }
 
-    listen(
-      win,
-      "resize",
-      function () {
-        gsap.delayedCall(0.18, measure);
-      },
-      { passive: true },
-    );
+    onResizeSettled(measure);
 
     gsap.fromTo(
       section,
       {
         autoAlpha: 0,
-        y: "3rem",
+        y: reduced ? 0 : "3rem",
       },
       {
         autoAlpha: 1,
         y: 0,
-        duration: 0.8,
+        duration: reduced ? 0 : 0.8,
         ease: "power3.out",
-        scrollTrigger: ScrollTrigger
-          ? {
-              trigger: section,
-              start: "top 90%",
-              toggleActions: "play none none reverse",
-            }
-          : null,
+        scrollTrigger:
+          !reduced && ScrollTrigger
+            ? {
+                trigger: section,
+                start: "top 90%",
+                toggleActions: "play none none reverse",
+              }
+            : null,
       },
     );
 
     initExploreCardHovers(allCards, isDragging, reduced, isTouch);
     var lens = initExploreLens(mask, clamp, isDragging, reduced, isTouch);
 
-    if (Draggable && !isTouch) {
-      draggable = Draggable.create(track, {
-        type: "x",
-        trigger: mask,
-        inertia: false,
-        allowContextMenu: true,
-        dragClickables: true,
-        onPress: function () {
-          dragging = true;
-          if (momentumTween) momentumTween.kill();
-
-          this._cltLastX = this.x;
-          this._cltLastTime = performance.now();
-          velocity = 0;
-
-          if (lens) lens.classList.add("is-dragging");
-        },
-        onDrag: function () {
-          var now = performance.now();
-          var deltaX = this.x - this._cltLastX;
-          var deltaTime = Math.max(16, now - this._cltLastTime);
-
-          velocity = (deltaX / deltaTime) * 1000;
-          this._cltLastX = this.x;
-          this._cltLastTime = now;
-
-          var wrapped = wrapNegativeX(this.x, setWidth);
-          if (Math.abs(wrapped - this.x) > 0.1) {
-            gsap.set(track, { x: wrapped });
-            this.x = wrapped;
-            this.update();
-            this._cltLastX = wrapped;
-          }
-        },
-        onRelease: function () {
-          dragging = false;
-          if (lens) lens.classList.remove("is-dragging");
-        },
-        onDragEnd: releaseMomentum,
-      })[0];
-    } else if (!isTouch) {
-      initPointerDragFallback(
-        mask,
-        track,
-        lens,
-        setTrackX,
-        isDragging,
-        function (nextVelocity) {
-          velocity = nextVelocity;
-        },
-        releaseMomentum,
-      );
-    }
+    initPointerDragFallback(
+      mask,
+      track,
+      lens,
+      setTrackX,
+      isDragging,
+      function (nextVelocity) {
+        velocity = nextVelocity;
+      },
+      releaseMomentum,
+      function () {
+        dragging = true;
+        if (momentumTween) momentumTween.kill();
+      },
+      function () {
+        dragging = false;
+        previousScroll = getScrollPosition();
+      },
+    );
+    state.cleanups.push(function () {
+      if (momentumTween) momentumTween.kill();
+    });
 
     var previousScroll = getScrollPosition();
 
-    addTick(function () {
+    var scrollFrame = 0;
+    function onScrollFrame() {
+      scrollFrame = 0;
       var scroll = getScrollPosition();
       var delta = scroll - previousScroll;
       previousScroll = scroll;
 
-      if (isDragging() || (momentumTween && momentumTween.isActive())) return;
+      if (
+        reduced ||
+        delta === 0 ||
+        isDragging() ||
+        (momentumTween && momentumTween.isActive())
+      )
+        return;
 
       var currentX = Number(gsap.getProperty(track, "x")) || 0;
       var push = clamp(-18, 18, delta * 0.55);
 
       if (push !== 0) {
         setTrackX(currentX - push);
-        if (draggable && typeof draggable.update === "function") {
-          draggable.update();
-        }
       }
+    }
+    listen(
+      win,
+      "scroll",
+      function () {
+        if (!scrollFrame && !reduced)
+          scrollFrame = win.requestAnimationFrame(onScrollFrame);
+      },
+      { passive: true },
+    );
+    state.cleanups.push(function () {
+      win.cancelAnimationFrame(scrollFrame);
     });
   }
 
@@ -1270,61 +1957,153 @@ window.CLT_HERO_FRAMES = [
     onPress,
     onRelease,
   ) {
-    var gsap = state.gsap;
-    var activePointer = null;
-    var startX = 0;
-    var startTrackX = 0;
-    var lastX = 0;
-    var lastTime = 0;
+    var activePointer = null,
+      axis = null,
+      frame = 0;
+    var startX = 0,
+      startY = 0,
+      startTrackX = 0,
+      nextX = 0;
+    var lastX = 0,
+      lastTime = 0,
+      suppressClickUntil = 0;
+    var oldTouchAction = mask.style.touchAction;
+    mask.style.touchAction = "pan-y pinch-zoom";
 
-    listen(mask, "pointerdown", function (event) {
-      if (event.button !== 0 || isDragging()) return;
-
-      activePointer = event.pointerId;
-      startX = event.clientX;
-      startTrackX = Number(gsap.getProperty(track, "x")) || 0;
-      lastX = event.clientX;
-      lastTime = performance.now();
-
-      if (lens) lens.classList.add("is-dragging");
-      if (typeof onPress === "function") onPress();
-
-      if (mask.setPointerCapture) {
-        mask.setPointerCapture(activePointer);
-      }
-    });
-
-    listen(mask, "pointermove", function (event) {
-      if (activePointer !== event.pointerId) return;
-
-      var now = performance.now();
-      var deltaX = event.clientX - lastX;
-      var deltaTime = Math.max(16, now - lastTime);
-
-      setVelocity((deltaX / deltaTime) * 1000);
-      setTrackX(startTrackX + event.clientX - startX);
-
-      lastX = event.clientX;
-      lastTime = now;
-    });
-
-    function endDrag(event) {
-      if (activePointer !== event.pointerId) return;
-
-      if (mask.releasePointerCapture) {
-        try {
-          mask.releasePointerCapture(activePointer);
-        } catch (error) {}
-      }
-
+    function render() {
+      frame = 0;
+      setTrackX(nextX);
+    }
+    function finish(cancelled) {
+      if (activePointer === null) return;
+      var id = activePointer,
+        moved = axis === "x";
       activePointer = null;
+      if (frame) {
+        win.cancelAnimationFrame(frame);
+        frame = 0;
+        if (!cancelled && moved) render();
+      }
+      if (mask.hasPointerCapture && mask.hasPointerCapture(id)) {
+        try {
+          mask.releasePointerCapture(id);
+        } catch (_) {}
+      }
+      if (moved) suppressClickUntil = performance.now() + 500;
+      if (cancelled || performance.now() - lastTime > 100) setVelocity(0);
+      mask.classList.remove("is-dragging");
       if (lens) lens.classList.remove("is-dragging");
       if (typeof onRelease === "function") onRelease();
-      releaseMomentum();
+      if (moved && !cancelled) releaseMomentum();
+      axis = null;
     }
 
-    listen(mask, "pointerup", endDrag);
-    listen(mask, "pointercancel", endDrag);
+    listen(
+      mask,
+      "pointerdown",
+      function (event) {
+        if (event.isPrimary === false) {
+          finish(true);
+          return;
+        }
+        if (activePointer !== null || event.button !== 0 || isDragging())
+          return;
+        if (
+          event.target.closest(
+            "button,input,select,textarea,[contenteditable='true']",
+          )
+        )
+          return;
+        suppressClickUntil = 0;
+        activePointer = event.pointerId;
+        axis = null;
+        startX = lastX = event.clientX;
+        startY = event.clientY;
+        lastTime = performance.now();
+        startTrackX = nextX = Number(state.gsap.getProperty(track, "x")) || 0;
+        setVelocity(0);
+        if (typeof onPress === "function") onPress();
+      },
+      { passive: true },
+    );
+
+    listen(
+      win,
+      "pointermove",
+      function (event) {
+        if (event.pointerId !== activePointer) return;
+        var dx = event.clientX - startX,
+          dy = event.clientY - startY;
+        if (!axis) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
+          if (Math.abs(dy) >= Math.abs(dx)) {
+            finish(true);
+            return;
+          }
+          axis = "x";
+          mask.classList.add("is-dragging");
+          if (lens) lens.classList.add("is-dragging");
+          try {
+            mask.setPointerCapture(activePointer);
+          } catch (_) {}
+        }
+        if (event.cancelable) event.preventDefault();
+        var now = performance.now();
+        var speed =
+          ((event.clientX - lastX) / Math.max(8, now - lastTime)) * 1000;
+        setVelocity(Math.max(-2500, Math.min(2500, speed)));
+        lastX = event.clientX;
+        lastTime = now;
+        nextX = startTrackX + dx;
+        if (!frame) frame = win.requestAnimationFrame(render);
+      },
+      { passive: false },
+    );
+    listen(win, "pointerup", function (event) {
+      if (event.pointerId === activePointer) finish(false);
+    });
+    listen(win, "pointercancel", function (event) {
+      if (event.pointerId === activePointer) finish(true);
+    });
+    listen(mask, "lostpointercapture", function (event) {
+      if (event.target === mask && event.pointerId === activePointer)
+        finish(true);
+    });
+    listen(
+      win,
+      "pointerdown",
+      function (event) {
+        if (event.isPrimary === false) finish(true);
+      },
+      { passive: true },
+    );
+    listen(win, "blur", function () {
+      finish(true);
+    });
+    listen(win, "pagehide", function () {
+      finish(true);
+    });
+    listen(doc, "visibilitychange", function () {
+      if (doc.hidden) finish(true);
+    });
+    listen(mask, "dragstart", function (event) {
+      event.preventDefault();
+    });
+    listen(
+      mask,
+      "click",
+      function (event) {
+        if (event.detail !== 0 && performance.now() < suppressClickUntil) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      },
+      true,
+    );
+    state.cleanups.push(function () {
+      finish(true);
+      mask.style.touchAction = oldTouchAction;
+    });
   }
 
   function initExploreCardHovers(cards, isDragging, reduced, isTouch) {
@@ -1342,29 +2121,27 @@ window.CLT_HERO_FRAMES = [
       gsap.set(card, {
         scaleX: 0.95,
         scaleY: 0.95,
-        filter: "brightness(0.7) saturate(0.82)",
         transformOrigin: "50% 50%",
-        force3D: true,
+        force3D: "auto",
       });
 
       gsap.set(image, {
         scaleX: 1.02,
         scaleY: 1.02,
-        filter: "saturate(0.98) contrast(1)",
         transformOrigin: "50% 50%",
-        force3D: true,
+        force3D: "auto",
       });
 
       gsap.set(staticLayer, {
         y: 0,
         autoAlpha: 1,
-        force3D: true,
+        force3D: "auto",
       });
 
       gsap.set(overlay, {
         autoAlpha: 0,
         y: 18,
-        force3D: true,
+        force3D: "auto",
       });
 
       gsap.set(overlayInner, {
@@ -1373,13 +2150,13 @@ window.CLT_HERO_FRAMES = [
         scaleX: 0.965,
         scaleY: 0.965,
         transformOrigin: "50% 100%",
-        force3D: true,
+        force3D: "auto",
       });
 
       gsap.set(overlayItems, {
         autoAlpha: 0,
         y: 8,
-        force3D: true,
+        force3D: "auto",
       });
 
       var timeline = gsap.timeline({
@@ -1396,7 +2173,6 @@ window.CLT_HERO_FRAMES = [
           {
             scaleX: 0.985,
             scaleY: 0.985,
-            filter: "brightness(0.86) saturate(0.94)",
             duration: reduced ? 0.01 : 0.34,
           },
           0,
@@ -1406,7 +2182,6 @@ window.CLT_HERO_FRAMES = [
           {
             scaleX: 1.075,
             scaleY: 1.075,
-            filter: "saturate(1.08) contrast(1.04)",
             duration: reduced ? 0.01 : 0.62,
             ease: "power2.out",
           },
@@ -1679,8 +2454,6 @@ window.CLT_HERO_FRAMES = [
     var overlayItems = queryAll(SELECTOR.zoomOverlayItems, section);
     var centerFigure = query(SELECTOR.zoomCenterFigure, section) || figures[0];
 
-    // Desktop: pinned collage. The center image grows until it owns the viewport;
-    // the supporting stills recede, then the gallery action arrives over the image.
     matchMedia.add(
       "(min-width: 64rem) and (prefers-reduced-motion: no-preference)",
       function () {
@@ -1722,14 +2495,15 @@ window.CLT_HERO_FRAMES = [
             invalidateOnRefresh: true,
             onLeave: syncZoomScrollBounds,
             onEnterBack: syncZoomScrollBounds,
+            onToggle: function (self) {
+              gsap.set(figures, {
+                willChange: self.isActive ? "transform, opacity" : "auto",
+              });
+            },
           },
         });
 
-        gsap.set(figures, {
-          autoAlpha: 1,
-          willChange: "transform, opacity",
-          force3D: true,
-        });
+        gsap.set(figures, { autoAlpha: 1, force3D: true });
         gsap.set(centerFigure, {
           zIndex: 5,
           transformOrigin:
@@ -1835,7 +2609,6 @@ window.CLT_HERO_FRAMES = [
             rotationY: 0,
             transformOrigin: "50% 50%",
             transformPerspective: 1000,
-            willChange: "transform, opacity",
             force3D: true,
           });
 
@@ -1957,8 +2730,6 @@ window.CLT_HERO_FRAMES = [
       },
     );
 
-    // Mobile: sticky-stacking deck. Each still recedes (scaleX/scaleY + fade) as the
-    // next scrolls over it; captions fade in per photo.
     matchMedia.add(
       "(max-width: 63.999rem) and (prefers-reduced-motion: no-preference)",
       function () {
@@ -2034,176 +2805,72 @@ window.CLT_HERO_FRAMES = [
     });
   }
 
-  function initReveals() {
-    var gsap = state.gsap;
-    var ScrollTrigger = state.ScrollTrigger;
-    var reduced = state.reduced;
-    var elements = queryAll(SELECTOR.reveal);
-
-    if (!elements.length) return;
-
-    if (reduced || !ScrollTrigger) {
-      gsap.set(elements, { opacity: 1, y: 0 });
-      return;
-    }
-
-    elements.forEach(function (element) {
-      var fade = (element.getAttribute("data-reveal") || "").trim() === "fade";
-      var delay = 0;
-      var group = element.closest("[data-reveal-stagger]");
-
-      if (group) {
-        var siblings = queryAll(SELECTOR.reveal, group);
-        delay = Math.max(0, siblings.indexOf(element)) * 0.09;
-      }
-
-      gsap.set(element, {
-        opacity: 0,
-        y: fade ? 0 : 34,
-        force3D: true,
-      });
-
-      function assemble() {
-        gsap.to(element, {
-          opacity: 1,
-          y: 0,
-          duration: 0.85,
-          ease: "back.out(1.3)",
-          delay: delay,
-          overwrite: "auto",
-        });
-      }
-
-      function strike(down) {
-        gsap.to(element, {
-          opacity: 0,
-          y: fade ? 0 : down ? -12 : 12,
-          duration: 0.4,
-          ease: "power2.in",
-          overwrite: "auto",
-        });
-      }
-
-      ScrollTrigger.create({
-        trigger: element,
-        start: "top 86%",
-        end: "bottom 12%",
-        onEnter: assemble,
-        onEnterBack: assemble,
-        onLeave: function () {
-          strike(true);
-        },
-        onLeaveBack: function () {
-          strike(false);
-        },
-      });
-    });
-  }
-
   function refreshAfterLayoutSettles() {
-    var ScrollTrigger = state.ScrollTrigger;
-    if (!ScrollTrigger) return;
-
+    var timer;
     function refresh() {
-      win.requestAnimationFrame(function () {
-        ScrollTrigger.refresh();
-      });
+      if (state.CLT && typeof state.CLT.refresh === "function") {
+        state.CLT.refresh();
+        return;
+      }
+      win.clearTimeout(timer);
+      timer = win.setTimeout(function () {
+        if (state.ScrollTrigger) state.ScrollTrigger.refresh();
+      }, 200);
     }
-
     listen(win, "load", refresh, { once: true });
-
-    if (doc.fonts && doc.fonts.ready) {
+    if (doc.fonts && doc.fonts.ready)
       doc.fonts.ready.then(refresh).catch(function () {});
-    }
-
-    win.setTimeout(refresh, 650);
-    win.setTimeout(refresh, 1400);
+    refresh();
+    state.cleanups.push(function () {
+      win.clearTimeout(timer);
+    });
   }
 
   function init(CLT) {
     state.CLT = CLT || win.CLT || {};
-
     state.gsap = win.gsap;
     if (!state.gsap) {
-      win.console.warn("[clt-homepage.js] GSAP was not found.");
+      win.console.warn("[CLT home] GSAP was not found.");
       return;
     }
-
     state.ScrollTrigger = getGSAPGlobal("ScrollTrigger");
-    state.Draggable = getGSAPGlobal("Draggable");
-    state.InertiaPlugin = getGSAPGlobal("InertiaPlugin");
+    if (state.ScrollTrigger) state.gsap.registerPlugin(state.ScrollTrigger);
+    else
+      win.console.warn(
+        "[CLT home] ScrollTrigger unavailable; scroll scenes skipped, carousels remain interactive.",
+      );
 
-    if (!state.ScrollTrigger) {
-      win.console.warn("[clt-homepage.js] ScrollTrigger was not found.");
-      return;
-    }
-
-    activateAvailablePlugins();
-
-    var gsap = state.gsap;
-    var ScrollTrigger = state.ScrollTrigger;
-    var isMobileLike = win.matchMedia(
-      "(max-width: 760px), (pointer: coarse)",
-    ).matches;
-
-    // Computed once and shared via state; each init* module reads state.reduced
-    // instead of re-running matchMedia.
     state.reduced = win.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    gsap.defaults({ overwrite: "auto" });
-
-    ScrollTrigger.config({
-      ignoreMobileResize: true,
-      autoRefreshEvents: isMobileLike
-        ? "visibilitychange,DOMContentLoaded,load"
-        : "visibilitychange,DOMContentLoaded,load,resize",
-    });
-
-    state.mainContext = gsap.context(function (self) {
+    state.gsap.context(function (self) {
       state.contextIgnore =
         self && typeof self.ignore === "function"
           ? self.ignore.bind(self)
           : null;
-
-      var modules = [
+      [
         { name: "Hero scrub", init: initHeroScrub },
         { name: "Acclaim marquee", init: initAcclaimMarquee },
         { name: "Explore carousel", init: initExploreCarousel },
-        { name: "Poster archive", init: initPosterArchive },
+        { name: "Show", init: initShow },
+        { name: "Archive", init: initArchive },
         { name: "Zoom gallery", init: initZoomGallery },
-        // Standard [data-reveal] animations are owned by clt-core.js.
-        // Keeping them out of the page script avoids duplicate ScrollTriggers/tweens.
         { name: "Layout refresh", init: refreshAfterLayoutSettles },
-      ];
-
-      modules.forEach(function (module) {
+      ].forEach(function (module) {
         try {
           module.init();
         } catch (error) {
           win.console.warn(
-            "[clt-homepage.js] " + module.name + " module failed.",
+            "[CLT home] " + module.name + " module failed.",
             error,
           );
         }
       });
     });
 
-    listen(
-      win,
-      "pagehide",
-      function () {
-        state.cleanups.forEach(function (cleanup) {
-          cleanup();
-        });
-
-        if (state.mainContext) {
-          state.mainContext.revert();
-        }
-
-        state.contextIgnore = null;
-      },
-      { once: true },
-    );
+    listen(win, "pageshow", function (event) {
+      if (event.persisted && state.CLT && state.CLT.refresh)
+        state.CLT.refresh();
+    });
   }
 
   function start() {
@@ -2228,9 +2895,7 @@ window.CLT_HERO_FRAMES = [
         return;
       }
 
-      win.console.warn(
-        "[clt-homepage.js] GSAP was not available before timeout.",
-      );
+      win.console.warn("[CLT home] GSAP was not available before timeout.");
     }
 
     tryStart();

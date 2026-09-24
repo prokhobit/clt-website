@@ -1,4 +1,4 @@
-/* CLT performance audit candidate. Standalone replacement; do not load with clt-core.js. */
+/* CLT core — 2026-09-23 · curtain v2 (pre-paint cover, settled raise, prefetch), dialog motion hooks, section-nav spy. Standalone; do not load with clt-core.js. */
 (function () {
   "use strict";
   if (window.CLT && (window.CLT.__initialized || window.CLT.__booted)) return; // idempotent
@@ -91,6 +91,8 @@
       cancelAnimationFrame(pending); pending = 0;
     });
   }
+
+  var arrivedViaCurtain = false; // set by readCurtainFlag() at boot
 
   // ── ready queue ───────────────────────────────────────────────────────────
   var readyQueue = [],
@@ -628,6 +630,12 @@
 
     function animateDialogOpen(d) {
       var gsap = window.gsap;
+      // A page can own a dialog's motion (e.g. a Flip from the element that
+      // opened it): d.__cltMotion = { open(d), close(d, done) }.
+      if (d.__cltMotion && typeof d.__cltMotion.open === "function") {
+        d.__cltMotion.open(d);
+        return;
+      }
       if (!gsap || prefersReducedMotion()) {
         d.classList.remove("is-animating");
         return;
@@ -717,6 +725,10 @@
 
     function animateDialogClose(d, done) {
       var gsap = window.gsap;
+      if (d.__cltMotion && typeof d.__cltMotion.close === "function") {
+        d.__cltMotion.close(d, done);
+        return;
+      }
       if (!gsap || prefersReducedMotion()) {
         done();
         return;
@@ -1361,6 +1373,18 @@
     $all("[data-clt-sectionnav]", root || document).forEach(function (nav) {
       var links = $all(".clt-sectionnav__link", nav);
       if (!links.length) return;
+      // Links whose #hash resolves are spied by position (the section under
+      // the reading line lights); otherwise fall back to page fraction.
+      var targets = links.map(function (l) {
+        var h = l.getAttribute("href") || "";
+        if (h.charAt(0) !== "#" || h.length < 2) return null;
+        try {
+          return document.getElementById(decodeURIComponent(h.slice(1)));
+        } catch (e) {
+          return null;
+        }
+      });
+      var spyByTarget = targets.some(Boolean);
       // Cache the scroll range so we don't force a layout (scrollHeight read)
       // on every scroll event — only on init and resize.
       var max = 1, lastIndex = -1, lastProgress = null;
@@ -1377,6 +1401,23 @@
         if (progress !== lastProgress) nav.style.setProperty("--progress", progress);
         lastProgress = progress;
         var idx = Math.min(links.length - 1, Math.floor(frac * links.length));
+        if (spyByTarget) {
+          var line = window.innerHeight * 0.38,
+            best = -Infinity;
+          idx = 0;
+          if (frac >= 0.995) {
+            for (var j = targets.length - 1; j >= 0; j--) if (targets[j]) { idx = j; break; }
+          } else {
+            targets.forEach(function (t, i) {
+              if (!t) return;
+              var top = t.getBoundingClientRect().top;
+              if (top <= line && top > best) {
+                best = top;
+                idx = i;
+              }
+            });
+          }
+        }
         if (idx === lastIndex) return;
         lastIndex = idx;
         links.forEach(function (l, i) {
@@ -1943,106 +1984,164 @@
     }
   }
 
-  // ── curtain — first-load raise + internal-nav transitions (opt-in) ─────────
+  // ── curtain — internal-navigation page transition (opt-in) ───────────────
+  // Leaving: a same-origin link click closes the curtain, then navigates.
+  // Arriving: the Site-wide <head> snippet (Webflow/Site Settings/head-code.html)
+  // reads the flag the previous page left and adds html.clt-curtain-in before
+  // first paint, so the stage is already drawn shut by CSS — the new page
+  // never flashes before the curtain covers it. The raise waits until the
+  // page's own scripts have run and painted once underneath, so the opening
+  // doesn't stutter against page setup.
+  // A plain first visit gets no curtain (data-clt-arrival covers that) unless
+  // CLT_CONFIG.curtain.onFirstLoad is true. Opt a link out with
+  // data-no-curtain on it or any ancestor.
+  function readCurtainFlag() {
+    var html = document.documentElement;
+    var flagged = false;
+    try {
+      flagged = sessionStorage.getItem("clt-curtain") === "1";
+      sessionStorage.removeItem("clt-curtain");
+    } catch (_) {}
+    arrivedViaCurtain = flagged || html.classList.contains("clt-curtain-in");
+    CLT.arrivedViaCurtain = arrivedViaCurtain; // pages time their intros to the raise
+  }
+
   function initCurtain() {
     var gsap = window.gsap;
+    var html = document.documentElement;
+    var body = document.body;
+    var cfg = config.curtain || {};
     var stage = $(".clt-curtain-stage");
-    // Opt in with data-clt-curtain on <body>, or simply by authoring the
-    // stage. A stage in the markup (e.g. from a shared Webflow component) is
-    // drawn closed by CSS, so on a page whose <body> lacks the attribute it
-    // used to stay shut over the whole page, forever.
-    if (!document.body.hasAttribute("data-clt-curtain") && !stage) return;
+    if (!body.hasAttribute("data-clt-curtain") && !stage) {
+      html.classList.remove("clt-curtain-in");
+      return;
+    }
     if (!stage) {
-      // inject if not authored (minor flash)
+      // Fallback for pages without the authored stage component. The head
+      // snippet's plain cover (html::after) hides the page until this lands.
       stage = document.createElement("div");
       stage.className = "clt-curtain-stage";
       stage.setAttribute("aria-hidden", "true");
+      stage.hidden = true;
       stage.innerHTML =
         '<div class="clt-curtain-stage__panel is-left"></div><div class="clt-curtain-stage__panel is-right"></div>';
-      document.body.appendChild(stage);
+      body.appendChild(stage);
     }
-    var ps = $all(".clt-curtain-stage__panel", stage),
-      left = ps[0],
-      right = ps[1];
-    var cfg = config.curtain || {},
-      dur = cfg.duration || 1.25;
-    var navigated = false;
+    var panels = $all(".clt-curtain-stage__panel", stage);
+    var left = panels[0],
+      right = panels[1];
+    if (!left || !right) {
+      html.classList.remove("clt-curtain-in");
+      return;
+    }
+    var reduced = env.reducedMotion || !gsap;
+    var raiseDur = cfg.duration || 1.1;
+    var fallDur = cfg.fallDuration || 0.78;
+    var easeOpen = CLT.motion.easeVelvet || "power2.inOut";
+    var tl = null,
+      navigated = false;
 
-    function raise() {
-      // part + reveal — flowy, top-pivot sway
+    function show() {
       stage.hidden = false;
-      if (env.reducedMotion || !gsap) {
-        stage.hidden = true;
-        return;
-      }
-      gsap.set([left, right], {
-        xPercent: 0,
-        rotation: 0,
-        transformOrigin: "50% 0%",
-      });
-      gsap
-        .timeline({
-          onComplete: function () {
-            stage.hidden = true;
-          },
-        })
-        .to(
-          left,
-          { xPercent: -104, rotation: -2, duration: dur, ease: "power2.inOut" },
-          0,
-        )
-        .to(
-          right,
-          { xPercent: 104, rotation: 2, duration: dur, ease: "power2.inOut" },
-          0.06,
-        );
+      stage.classList.add("is-active");
     }
-    function fall(done) {
-      // cover, then run done()
-      stage.hidden = false;
-      if (env.reducedMotion || !gsap) {
-        if (done) done();
-        return;
-      }
+    function hide() {
+      if (tl) tl.kill();
+      tl = null;
+      stage.hidden = true;
+      stage.classList.remove("is-active");
+      html.classList.remove("clt-curtain-in");
+      if (gsap) gsap.set([left, right], { clearProps: "transform,willChange" });
+    }
+    function pose(open) {
       gsap.set(left, {
-        xPercent: -104,
-        rotation: -2,
+        xPercent: open ? -104 : 0,
+        rotation: open ? -2 : 0,
         transformOrigin: "50% 0%",
+        force3D: true,
+        willChange: "transform",
       });
       gsap.set(right, {
-        xPercent: 104,
-        rotation: 2,
+        xPercent: open ? 104 : 0,
+        rotation: open ? 2 : 0,
         transformOrigin: "50% 0%",
+        force3D: true,
+        willChange: "transform",
       });
-      gsap
-        .timeline({
-          onComplete: function () {
-            if (done) done();
-          },
-        })
-        .to(
-          left,
-          {
-            xPercent: 0,
-            rotation: 0,
-            duration: dur * 0.9,
-            ease: "power2.inOut",
-          },
-          0,
-        )
-        .to(
-          right,
-          {
-            xPercent: 0,
-            rotation: 0,
-            duration: dur * 0.9,
-            ease: "power2.inOut",
-          },
-          0.06,
-        );
     }
 
-    requestAnimationFrame(raise); // raise on load
+    function raise() {
+      if (reduced) {
+        hide();
+        return;
+      }
+      if (tl) tl.kill();
+      show();
+      pose(false);
+      // The stage now covers on its own; drop the CSS pre-paint cover.
+      html.classList.remove("clt-curtain-in");
+      tl = gsap
+        .timeline({ onComplete: hide })
+        .to(left, { xPercent: -104, rotation: -2, duration: raiseDur, ease: easeOpen }, 0)
+        .to(right, { xPercent: 104, rotation: 2, duration: raiseDur, ease: easeOpen }, 0.06);
+    }
+
+    function fall(done) {
+      if (reduced) {
+        done();
+        return;
+      }
+      if (tl) tl.kill();
+      show();
+      pose(true);
+      tl = gsap
+        .timeline({ onComplete: done })
+        .to(left, { xPercent: 0, rotation: 0, duration: fallDur, ease: "power3.inOut" }, 0)
+        .to(right, { xPercent: 0, rotation: 0, duration: fallDur, ease: "power3.inOut" }, 0.04);
+    }
+
+    // Raise only after DOMContentLoaded (every deferred page script has run),
+    // fonts are in (capped), and two frames have painted under the curtain.
+    function whenPageSettled(cb) {
+      var fired = false;
+      function once() {
+        if (fired) return;
+        fired = true;
+        var fonts = document.fonts && document.fonts.ready;
+        var waited = false;
+        function frames() {
+          if (waited) return;
+          waited = true;
+          requestAnimationFrame(function () {
+            requestAnimationFrame(cb);
+          });
+        }
+        if (fonts && typeof fonts.then === "function") {
+          fonts.then(frames, frames);
+          setTimeout(frames, cfg.fontWait || 450);
+        } else frames();
+      }
+      if (document.readyState === "complete") once();
+      else {
+        document.addEventListener("DOMContentLoaded", once, { once: true });
+        window.addEventListener("load", once, { once: true });
+      }
+      setTimeout(once, cfg.maxWait || 1500); // never hold the curtain on a slow asset
+    }
+
+    // An authored stage without `hidden` (About, Press, Young Artist Program
+    // today) is drawn shut by the design-system CSS from first paint when the
+    // head snippet isn't installed. Raise it rather than snapping it away.
+    var drawnShut = !stage.hidden && getComputedStyle(stage).display !== "none";
+    if (arrivedViaCurtain || cfg.onFirstLoad || (drawnShut && !reduced)) {
+      if (!reduced) {
+        show();
+        pose(false);
+      }
+      whenPageSettled(raise);
+    } else {
+      hide();
+    }
 
     function go(href) {
       if (navigated) return;
@@ -2062,14 +2161,10 @@
       )
         return false;
       if (a.target && a.target !== "_self") return false;
-      if (a.hasAttribute("download")) return false;
+      if (a.hasAttribute("download") || a.hasAttribute("data-open-dialog")) return false;
+      if (a.closest("[data-no-curtain]")) return false;
       var href = a.getAttribute("href");
-      if (
-        !href ||
-        href.charAt(0) === "#" ||
-        href.indexOf("mailto:") === 0 ||
-        href.indexOf("tel:") === 0
-      )
+      if (!href || href.charAt(0) === "#" || /^(mailto|tel|sms|javascript):/i.test(href))
         return false;
       var url;
       try {
@@ -2077,33 +2172,65 @@
       } catch (_) {
         return false;
       }
+      if (url.protocol !== "http:" && url.protocol !== "https:") return false;
       if (url.origin !== location.origin) return false;
-      if (url.pathname === location.pathname && url.hash) return false; // in-page anchor
+      if (url.pathname === location.pathname && url.search === location.search && url.hash)
+        return false; // in-page anchor
+      if (/\.(pdf|zip|jpe?g|png|webp|avif|gif|mp4|webm|mov|mp3|docx?)$/i.test(url.pathname))
+        return false; // files open as files
       return true;
     }
+    // Popovers (the mobile nav sheet) and modal dialogs sit in the top layer,
+    // above any z-index — close them or the curtain falls behind them.
+    function clearTopLayer() {
+      try {
+        $all(":popover-open").forEach(function (p) {
+          p.hidePopover();
+        });
+      } catch (_) {}
+      $all("dialog[open]").forEach(function (d) {
+        try {
+          d.close();
+        } catch (_) {}
+      });
+    }
     document.addEventListener("click", function (e) {
-      var a = e.target.closest ? e.target.closest("[href]") : null;
+      if (reduced) return; // plain navigation, nothing to wait for
+      var a = e.target.closest ? e.target.closest("a[href]") : null;
       if (!shouldIntercept(a, e)) return;
       e.preventDefault();
+      var href = a.href;
       try {
         sessionStorage.setItem("clt-curtain", "1");
       } catch (_) {}
+      clearTopLayer();
+      CLT.stopScroll();
       fall(function () {
-        go(a.href);
+        go(href);
       });
-      setTimeout(
-        function () {
-          go(a.href);
-        },
-        dur * 1000 + 500,
-      ); // fail-open
+      setTimeout(function () {
+        go(href);
+      }, fallDur * 1000 + 450); // fail-open
     });
     window.addEventListener("pageshow", function (e) {
-      if (e.persisted) { navigated = false; stage.hidden = true; }
+      if (!e.persisted) return;
+      // Restored from the back/forward cache with the curtain shut.
+      navigated = false;
+      try {
+        sessionStorage.removeItem("clt-curtain");
+      } catch (_) {}
+      hide();
+      CLT.startScroll();
     });
+
+    initPrefetch(shouldIntercept);
 
     CLT.curtain = {
       fall: function (href) {
+        try {
+          sessionStorage.setItem("clt-curtain", "1");
+        } catch (_) {}
+        clearTopLayer();
         fall(function () {
           go(href || location.href);
         });
@@ -2114,6 +2241,55 @@
       },
       _shouldIntercept: shouldIntercept,
     };
+  }
+
+  // Warm the next page while the curtain is still falling. Speculation Rules
+  // (Chromium) prefetch on hover/press; elsewhere a <link rel=prefetch> is
+  // added on first hover/touch of an internal link. Skipped on Save-Data.
+  function initPrefetch(isInternal) {
+    var cfg = config.curtain || {};
+    if (cfg.prefetch === false) return;
+    var conn = navigator.connection;
+    if (conn && (conn.saveData || /2g/.test(conn.effectiveType || ""))) return;
+    if (
+      window.HTMLScriptElement &&
+      typeof HTMLScriptElement.supports === "function" &&
+      HTMLScriptElement.supports("speculationrules")
+    ) {
+      var rules = document.createElement("script");
+      rules.type = "speculationrules";
+      rules.textContent = JSON.stringify({
+        prefetch: [
+          {
+            source: "document",
+            where: {
+              and: [
+                { href_matches: "/*" },
+                { not: { selector_matches: "[data-no-curtain] a, a[data-no-curtain], a[target=_blank], a[download]" } },
+              ],
+            },
+            eagerness: "moderate",
+          },
+        ],
+      });
+      document.head.appendChild(rules);
+      return;
+    }
+    var seen = {};
+    function warm(e) {
+      var a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
+      if (!a || seen[a.href]) return;
+      if (!isInternal(a, { button: 0 })) return;
+      var url = new URL(a.href, location.href);
+      if (url.pathname === location.pathname) return;
+      seen[a.href] = true;
+      var link = document.createElement("link");
+      link.rel = "prefetch";
+      link.href = url.pathname + url.search;
+      document.head.appendChild(link);
+    }
+    document.addEventListener("mouseover", warm, { passive: true });
+    document.addEventListener("touchstart", warm, { passive: true });
   }
 
   // ── reveal-on-scroll · "stage assembly" (GSAP-driven, opt-in) ──────────────
@@ -2442,17 +2618,11 @@
   // when a curtain rise is pending (that IS the arrival), reduced motion, or
   // no GSAP.
   function initArrival() {
-    // Read AND clear the flag the curtain leaves when it navigates. It means
-    // "this load was reached through the curtain" — one load only. Left in
-    // place, every later load in the session skipped the arrival fade.
-    var pendingCurtain = false;
-    try {
-      pendingCurtain = sessionStorage.getItem("clt-curtain") === "1";
-      sessionStorage.removeItem("clt-curtain");
-    } catch (_) {}
+    // readCurtainFlag() (run first in boot) read AND cleared the one-load
+    // flag the curtain leaves when it navigates: a curtain raise IS the arrival.
     if (!document.body || !document.body.hasAttribute("data-clt-arrival")) return;
     var gsap = window.gsap;
-    if (env.reducedMotion || !gsap || pendingCurtain) return;
+    if (env.reducedMotion || !gsap || arrivedViaCurtain) return;
     var dim = document.createElement("div");
     dim.setAttribute("aria-hidden", "true");
     dim.style.cssText =
@@ -2557,6 +2727,9 @@
         });
         if (bad.length) {
           e.preventDefault();
+          // Webflow's form handler is delegated from document; don't let an
+          // invalid submit bubble up and get posted anyway.
+          e.stopPropagation();
           bad[0].focus();
         }
       });
@@ -2819,7 +2992,8 @@
     if (CLT.__booted) return;
     CLT.__booted = true;
     initMotion();
-    initArrival(); // must read the curtain flag before initCurtain consumes it
+    readCurtainFlag(); // one-load flag shared by arrival + curtain
+    initArrival();
     initCurtain();
     initScroll();
     initLayoutRefresh();
