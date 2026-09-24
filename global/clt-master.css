@@ -7283,6 +7283,16 @@ a.clt-icon-disc:hover svg,
   }
 }
 
+/* Touch devices: hold the aurora still, no blur or blend */
+@media (pointer: coarse) {
+  .clt-ambient .clt-ambient__blob {
+    filter: none;
+    mix-blend-mode: normal;
+    animation: none;
+    translate: none;
+  }
+}
+
 /* Curtain failsafe (lifts the curtain if clt-core never runs) */
 .clt-curtain-stage:not(.is-live) {
   animation: clt-curtain-failsafe .8s ease 4s forwards;
