@@ -447,6 +447,40 @@
     }
 
     /* ── Wiring · delegated, so cards added later need no rebinding ───────── */
+    /* Phones: a profile opens as a bottom sheet instead of re-sorting the grid. */
+    var sheetMq = window.matchMedia("(max-width: 47.99rem)");
+    var sheet = null;
+    function openSheet(member) {
+      if (!sheet) {
+        sheet = document.createElement("dialog");
+        sheet.id = "au-sheet";
+        sheet.className = "clt-dialog is-sheet au-sheet";
+        sheet.innerHTML =
+          '<button type="button" class="clt-dialog__close" data-close-dialog aria-label="Close profile">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>' +
+          '</button><div class="au-sheet__head"></div><div class="au-sheet__body"></div>';
+        document.body.appendChild(sheet);
+      }
+      var head = sheet.querySelector(".au-sheet__head");
+      var body = sheet.querySelector(".au-sheet__body");
+      head.textContent = "";
+      body.textContent = "";
+      [".au-member__portrait", ".au-member__id"].forEach(function (sel) {
+        var el = member.querySelector(sel);
+        if (el) head.appendChild(el.cloneNode(true));
+      });
+      [".au-member__socials", ".au-member__bio"].forEach(function (sel) {
+        var el = member.querySelector(sel);
+        if (el) body.appendChild(el.cloneNode(true));
+      });
+      var name = member.querySelector(".au-member__name");
+      sheet.setAttribute("aria-label", name ? name.textContent.trim() : "Team member");
+      if (window.CLT && CLT.dialogs && typeof CLT.dialogs.open === "function") CLT.dialogs.open(sheet);
+      else if (typeof sheet.showModal === "function") sheet.showModal();
+      else sheet.setAttribute("open", "");
+      sheet.scrollTop = 0;
+    }
+
     grid.addEventListener("click", function (e) {
       var closer = e.target.closest ? e.target.closest(CLOSE) : null;
       if (closer && grid.contains(closer)) {
@@ -475,6 +509,11 @@
          happens to cancel the jump today; don't depend on it — a followed
          "#" scrolls the page to the top mid-morph. */
       e.preventDefault();
+      if (sheetMq.matches) {
+        if (open) setOpen(null);
+        openSheet(member);
+        return;
+      }
       setOpen(member === open ? null : member);
     });
 
@@ -574,7 +613,8 @@
       if (!target || target.getAttribute("data-au-member") === null) return;
       if (entranceOn) finishEntrance(cards());
       window.requestAnimationFrame(function () {
-        setOpen(target);
+        if (sheetMq.matches) openSheet(target);
+        else setOpen(target);
       });
     })();
 

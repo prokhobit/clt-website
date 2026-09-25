@@ -382,6 +382,9 @@ dialog.clt-dialog.pfs-film[open] {
     box-shadow: var(--shadow-raise);
     scroll-padding-inline: 0.35rem;
   }
+  .pfs-shell > .pfs-rail {
+    position: static;
+  }
   .pfs-rail .clt-sectionnav::-webkit-scrollbar {
     display: none;
   }

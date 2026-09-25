@@ -86,7 +86,10 @@
           charsClass: "pfs-char",
         }).chars;
     }
-    var blurIn = { autoAlpha: 0, filter: "blur(14px)", yPercent: 22 };
+    // Touch devices get the same rise without the blur (45 blurred layers at once is too much for a phone).
+    var soft = !win.matchMedia("(pointer: coarse)").matches;
+    function blur(px) { return soft ? "blur(" + px + "px)" : "none"; }
+    var blurIn = { autoAlpha: 0, filter: blur(14), yPercent: 22 };
 
     var tl = gsap.timeline({
       paused: true,
@@ -106,7 +109,7 @@
         blurIn,
         {
           autoAlpha: 1,
-          filter: "blur(0px)",
+          filter: blur(0),
           yPercent: 0,
           duration: 0.9,
           stagger: 0.022,
@@ -119,7 +122,7 @@
         blurIn,
         {
           autoAlpha: 1,
-          filter: "blur(0px)",
+          filter: blur(0),
           yPercent: 0,
           duration: 1.25,
           stagger: 0.07,
@@ -129,10 +132,10 @@
       )
       .fromTo(
         lede,
-        { autoAlpha: 0, filter: "blur(10px)", y: 14 },
+        { autoAlpha: 0, filter: blur(10), y: 14 },
         {
           autoAlpha: 1,
-          filter: "blur(0px)",
+          filter: blur(0),
           y: 0,
           duration: 1.1,
           ease: focusEase,

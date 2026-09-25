@@ -595,6 +595,41 @@ body {
   }
 }
 
+.au-sheet__head {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1.5rem 4rem 1rem 1.15rem;
+}
+
+.au-sheet__head .au-member__role::after {
+  display: none;
+}
+
+.au-sheet__head .au-member__name {
+  font-size: 1.35rem;
+}
+
+.au-sheet__head .au-member__line {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.au-sheet__body {
+  display: grid;
+  gap: 1.1rem;
+  padding: 0 1.15rem 1.75rem;
+}
+
+.au-sheet .au-member__socials {
+  padding: 0;
+}
+
+.au-sheet .au-member__bio {
+  max-width: none;
+}
+
 /* Team roster (CMS) */
 .au-roster-wrap {
   width: 100%;

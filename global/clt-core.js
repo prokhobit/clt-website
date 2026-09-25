@@ -655,7 +655,7 @@
         y: 30,
         scaleX: 0.958,
         scaleY: 0.972,
-        filter: "blur(6px)",
+        filter: env.isTouch ? "none" : "blur(6px)",
         transformOrigin: "50% 50%",
         willChange: "transform, opacity, filter",
         force3D: true,
@@ -689,7 +689,7 @@
             y: 0,
             scaleX: 1,
             scaleY: 1,
-            filter: "blur(0px)",
+            filter: env.isTouch ? "none" : "blur(0px)",
             duration: dialogMotion.durationIn,
             ease: dialogMotion.easeIn,
           },
@@ -781,7 +781,7 @@
             y: 20,
             scaleX: 0.982,
             scaleY: 0.986,
-            filter: "blur(4px)",
+            filter: env.isTouch ? "none" : "blur(4px)",
             duration: dialogMotion.durationOut,
             ease: dialogMotion.easeOut,
           },
@@ -1569,8 +1569,13 @@
         }
         revealCurrent();
       }
+      var dockMq = window.matchMedia("(min-width: 62rem)");
       function checkDock() {
         if (!canDock) return;
+        if (!dockMq.matches) { // phones and tablets: the nav scrolls away with its section
+          if (docked) dock(false);
+          return;
+        }
         var offset = dockOffset();
         var anchor = docked ? spacer : nav;
         var shouldDock = anchor.getBoundingClientRect().top < offset;
@@ -1797,6 +1802,30 @@
       active.style.setProperty("--mx", cmx.toFixed(2) + "%");
       active.style.setProperty("--my", cmy.toFixed(2) + "%");
     }
+  }
+
+  // ── decorative loops pause off screen ────────────────────────────────────
+  function initOffscreenPause() {
+    if (!("IntersectionObserver" in window) || !document.getAnimations || typeof CSSAnimation === "undefined") return;
+    var byEl = new Map();
+    document.getAnimations().forEach(function (a) {
+      var eff = a.effect, el = eff && eff.target;
+      if (!el || !(a instanceof CSSAnimation) || eff.getTiming().iterations !== Infinity) return;
+      if (el.closest && el.closest(".clt-curtain-stage, .clt-mainnav, .clt-home-dust, .clt-ambient")) return;
+      var list = byEl.get(el);
+      if (!list) byEl.set(el, (list = []));
+      list.push(a);
+    });
+    if (!byEl.size) return;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        (byEl.get(e.target) || []).forEach(function (a) {
+          if (e.isIntersecting) a.play();
+          else a.pause();
+        });
+      });
+    }, { rootMargin: "200px 0px" });
+    byEl.forEach(function (_, el) { io.observe(el); });
   }
 
   // ── dust canopy ────────────────────────────────────────────────────────
@@ -2806,6 +2835,8 @@
     initPromenade();
     initIdlePause();
     flushReady();
+    if (document.readyState === "complete") setTimeout(initOffscreenPause, 1200);
+    else window.addEventListener("load", function () { setTimeout(initOffscreenPause, 1200); }, { once: true });
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot, { once: true });
