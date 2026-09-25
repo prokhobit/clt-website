@@ -45,6 +45,73 @@
     });
   }
 
+  var COUNT_WORDS = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"];
+  var TONES = ["brass", "candle", "linen", "smoke", "velvet"];
+
+  function youtubeId(href) {
+    var m = /(?:youtu\.be\/|[?&]v=|\/(?:embed|shorts|live)\/)([\w-]{11})/.exec(href || "");
+    return m ? m[1] : "";
+  }
+  function youtubeStart(href) {
+    var m = /[?&#](?:t|start)=(?:(\d+)h)?(?:(\d+)m)?(\d+)s?/.exec(href || "");
+    return m ? (+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + +m[3] : 0;
+  }
+  function pad(n) {
+    return n < 10 ? "0" + n : String(n);
+  }
+  function tone(badge, scope) {
+    var data = scope.querySelector("[data-yap-tone]");
+    var t = text(data).toLowerCase();
+    if (badge && TONES.indexOf(t) > -1) badge.classList.add("is-" + t);
+  }
+
+  // CMS roster: the collection list carries raw fields; fill in what Webflow can't bind.
+  function hydrateRoster(page) {
+    var n = 0;
+    all(".yap-student", page).forEach(function (student) {
+      var head = student.querySelector(".yap-student__id");
+      var name = text(student.querySelector(".yap-student__name"));
+      if (head) tone(head.querySelector(".clt-badge"), head);
+
+      var cards = all(".yap-card", student);
+      var count = student.querySelector(".yap-student__count");
+      if (count && cards.length) {
+        count.textContent = (COUNT_WORDS[cards.length] || cards.length) + (cards.length === 1 ? " performance" : " performances");
+      }
+
+      cards.forEach(function (card) {
+        var index = card.querySelector(".yap-card__index");
+        n += 1;
+        if (index) index.textContent = pad(n);
+        tone(card.querySelector(".yap-card__row .clt-badge"), card);
+
+        var link = card.querySelector("a.yap-video");
+        if (!link || link.hasAttribute("data-yt")) return;
+        var href = link.getAttribute("href");
+        var id = youtubeId(href);
+        var piece = text(card.querySelector(".yap-card__piece"));
+        link.setAttribute("aria-label", "Play " + [name, piece].filter(Boolean).join(" singing "));
+
+        if (!id) {
+          link.removeAttribute("data-open-dialog");
+          link.target = "_blank";
+          link.rel = "noopener";
+          return;
+        }
+        link.setAttribute("data-yt", id);
+        var start = parseInt(text(card.querySelector("[data-yap-start]")), 10) || youtubeStart(href);
+        if (start > 0) link.setAttribute("data-start", start);
+
+        var thumb = link.querySelector(".yap-video__thumb");
+        if (thumb && (!thumb.getAttribute("src") || thumb.classList.contains("w-dyn-bind-empty"))) {
+          thumb.classList.remove("w-dyn-bind-empty");
+          thumb.removeAttribute("srcset");
+          thumb.src = "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg";
+        }
+      });
+    });
+  }
+
   // Hero: the copy holds while the photo rises under it (wide screens); the photo grows in elsewhere.
   function initHeroOverlay() {
     var gsap = window.gsap, ST = window.ScrollTrigger;
@@ -184,6 +251,11 @@
 
   // clt-core flushes CLT.ready at the end of its boot; the timer covers a core that never gets there.
   function start() {
+    var page = document.querySelector(".yap-page");
+    if (page) {
+      try { hydrateRoster(page); }
+      catch (e) { console.warn("[CLT young-artist-program] roster failed", e); }
+    }
     if (window.CLT && typeof window.CLT.ready === "function") {
       window.CLT.ready(boot);
       setTimeout(boot, 3000);
