@@ -4945,21 +4945,46 @@ a.clt-card:hover {
 }
 
 dialog.clt-dialog {
-  border: 1px solid var(--line);
-  border-radius: var(--r-shell);
-  background: radial-gradient(ellipse 90% 70% at 50% 0%, color-mix(in srgb, var(--clt-candle-rgb) 8%, transparent), transparent 64%), linear-gradient(165deg, color-mix(in srgb, var(--clt-plum-rgb) 60%, transparent), color-mix(in srgb, var(--clt-void) 90%, transparent)), var(--surface);
-  color: var(--text);
-  padding: 0;
-  max-width: min(36rem, 92vw);
-  box-shadow: var(--shadow-deep), 0 0 80px color-mix(in srgb, var(--clt-brass-rgb) 10%, transparent);
+  --lamp-rgb: var(--clt-candle-rgb);
   position: relative;
+  isolation: isolate;
+  max-width: min(36rem, 92vw);
+  padding: 0;
   overflow: visible;
+  border: 1px solid color-mix(in srgb, var(--clt-brass-rgb) 28%, transparent);
+  border-radius: var(--r-shell);
+  background: radial-gradient(ellipse 70% 50% at 50% 0%, color-mix(in srgb, var(--lamp-rgb) 11%, transparent), transparent 72%), var(--clt-pitch);
+  color: var(--text);
+  box-shadow: inset 0 1px 0 rgb(255 244 218 / 0.08), inset 0 -1px 0 rgb(0 0 0 / 0.6), inset 0 0 90px rgb(0 0 0 / 0.55), 0 32px 80px rgb(0 0 0 / 0.65), 0 0 90px color-mix(in srgb, var(--clt-brass-rgb) 10%, transparent);
+}
+
+dialog.clt-dialog::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -1px;
+  z-index: 3;
+  width: min(60%, 22rem);
+  height: 2px;
+  translate: -50% 0;
+  border-radius: 2px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--lamp-rgb) 64%, transparent) 18%, var(--clt-filament) 50%, color-mix(in srgb, var(--lamp-rgb) 64%, transparent) 82%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--lamp-rgb) 52%, transparent), 0 0 24px color-mix(in srgb, var(--lamp-rgb) 22%, transparent);
 }
 
 dialog.clt-dialog::backdrop {
-  background: radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in srgb, var(--clt-velvet-rgb) 30%, transparent), transparent 60%), rgb(0 0 0 / 0.74);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  background: radial-gradient(ellipse 80% 60% at 50% 0%, color-mix(in srgb, var(--clt-velvet-rgb) 30%, transparent), transparent 60%), rgb(4 3 6 / 0.8);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+@media (pointer: coarse) {
+  dialog.clt-dialog::backdrop {
+    background: rgb(4 3 6 / 0.88);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 .clt-dialog__body {
@@ -7259,8 +7284,8 @@ a.clt-icon-disc:hover svg,
   }
 }
 
-/* Close button (dialogs, team cards). Scoped to .clt-dialog so it outranks the legacy page embeds. */
-.clt-dialog .clt-dialog__close,
+/* Close button (dialogs, team cards) */
+.clt-dialog__close,
 .au-member__close {
   width: 2.5rem;
   height: 2.5rem;
@@ -7278,28 +7303,27 @@ a.clt-icon-disc:hover svg,
   transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease), rotate var(--dur-base) var(--ease-stage), scale var(--dur-fast) var(--ease);
 }
 
-.clt-dialog .clt-dialog__close svg,
+.clt-dialog__close svg,
 .au-member__close svg {
   width: 1.1rem;
   height: 1.1rem;
   stroke-width: 1.8;
 }
 
-.clt-dialog .clt-dialog__close:hover,
+.clt-dialog__close:hover,
 .au-member__close:hover {
   color: var(--clt-bone);
   border-color: color-mix(in srgb, var(--clt-brass-rgb) 66%, transparent);
   background: color-mix(in srgb, var(--clt-brass-rgb) 26%, transparent);
-  transform: none;
   rotate: 90deg;
 }
 
-.clt-dialog .clt-dialog__close:active,
+.clt-dialog__close:active,
 .au-member__close:active {
   scale: 0.94;
 }
 
-.clt-dialog .clt-dialog__close:focus-visible,
+.clt-dialog__close:focus-visible,
 .au-member__close:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-offset);
