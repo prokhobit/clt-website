@@ -433,7 +433,12 @@
   color: var(--text);
 }
 
-.yap-card__venue p,
+.yap-card__venue p {
+  margin: 0;
+  color: inherit;
+  font-size: inherit;
+}
+
 .yap-student__id > .clt-badge,
 .yap-card__row > .clt-badge {
   margin: 0;
