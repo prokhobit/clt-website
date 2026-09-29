@@ -1299,6 +1299,43 @@ dialog.clt-dialog.is-poster {
   margin-top: -1.6rem;
 }
 
+/* Poster mount: no ornate border, lamp-lit glass edge */
+.home-show__stage .home-show__frame {
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.55),0 2px 3px rgb(0 0 0 / 0.5),0 22px 40px -10px rgb(0 0 0 / 0.75),0 36px 70px -24px color-mix(in srgb,var(--clt-candle-rgb) 30%,transparent);
+  transition: box-shadow 600ms var(--ease-stage);
+}
+
+.home-show__poster-link:is(:hover,:focus-visible) .home-show__frame {
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.55),0 2px 3px rgb(0 0 0 / 0.5),0 26px 48px -10px rgb(0 0 0 / 0.8),0 40px 80px -22px color-mix(in srgb,var(--clt-candle-rgb) 44%,transparent);
+}
+
+.home-show__stage .home-show__art {
+  border-radius: 6px;
+}
+
+.home-show__stage .home-show__art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb,var(--clt-brass-rgb) 22%,transparent),inset 0 1px 0 rgb(255 244 218 / 0.28);
+  background: linear-gradient(180deg,color-mix(in srgb,var(--clt-candle-rgb) 14%,transparent),transparent 26%),linear-gradient(115deg,transparent 42%,rgb(255 255 255 / 0.08) 50%,transparent 58%) 100% 0 / 260% 100% no-repeat;
+  transition: background-position 1100ms var(--ease-stage);
+}
+
+.home-show__poster-link:is(:hover,:focus-visible) .home-show__art::after {
+  background-position: 0 0,0 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-show__stage .home-show__art::after {
+    transition: none;
+  }
+}
+
 .home-show__accolade {
   margin: 0;
   text-align: center;

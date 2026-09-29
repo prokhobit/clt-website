@@ -14,6 +14,13 @@ const here=k(location.pathname),hide=()=>{try{m&&m.matches(':popover-open')&&m.h
 const links=[...n.querySelectorAll('.clt-mainnav__link')];
 n.querySelectorAll('a[href]').forEach(a=>{a.addEventListener('click',hide);try{const t=new URL(a.getAttribute('href'),location.href);if(a.classList.contains('clt-mainnav__link')&&t.origin===location.origin&&k(t.pathname)===here&&!t.hash)a.setAttribute('aria-current','page')}catch(e){}});
 links.forEach((a,i)=>a.style.setProperty('--i',i+1));
+// Emblem: back to the top of the page; on Home, back to the Explore carousel. Cmd/Ctrl-click still opens Home.
+const br=n.querySelector('.clt-mainnav__brand'),home=here==='/';
+if(br){br.setAttribute('aria-label','Commonwealth Lyric Theater — '+(home?'back to Explore':'back to top'));
+br.addEventListener('click',e=>{if(e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();hide();
+// Layout position (ignores reveal transforms and the section's scroll-margin): Explore lands just under the bar.
+let el=home&&document.getElementById('explore'),y=0;if(el){for(;el;el=el.offsetParent)y+=el.offsetTop;y=Math.max(0,y-(parseFloat(r.style.getPropertyValue('--clt-nav-offset'))||0))}
+const C=window.CLT;if(C&&typeof C.scrollTo==='function')C.scrollTo(y);else scrollTo({top:y,behavior:'smooth'})})}
 // Sliding glow (desktop): rests on the current page, glides to whatever is hovered or focused.
 const L=n.querySelector('.clt-mainnav__links'),g=L&&L.querySelector('.clt-mainnav__glow');
 const cur=()=>links.find(a=>a.getAttribute('aria-current')==='page'||a.classList.contains('w--current'));
