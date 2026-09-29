@@ -34,7 +34,7 @@
   --dur-base: 380ms;
   --dur-slow: 700ms;
   --dur-curtain: 1100ms;
-  / --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-stage: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-velvet: cubic-bezier(0.65, 0, 0.05, 1);
   --shadow-low: inset 0 1px 0 rgb(255 244 218 / 0.08), inset 0 -1px 0 rgb(0 0 0 / 0.42), 0 4px 10px rgb(0 0 0 / 0.32);
@@ -5205,6 +5205,11 @@ dialog.clt-dialog.is-wide {
   transition: border-color 380ms var(--ease), transform 320ms var(--ease), box-shadow 540ms var(--ease-stage);
 }
 
+/* .clt-callout's transition list comes after .has-underglow's, so a glowing callout lost its filter transition */
+.clt-callout.has-underglow {
+  transition: border-color 380ms var(--ease), transform 320ms var(--ease), box-shadow 540ms var(--ease-stage), filter 720ms var(--ease-stage);
+}
+
 .clt-callout::before {
   content: '';
   position: absolute;
@@ -6646,6 +6651,7 @@ a.clt-person-card:focus-visible {
 
 :where(.clt-feature-card__icon, .clt-feature-row__icon, .clt-footer__social a, .clt-navbar__seal, .clt-media-ph__seal, .clt-icon-disc) svg {
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--clt-brass-rgb) 45%, transparent));
+  transition: filter var(--dur-base) var(--ease);
 }
 
 .clt-media-ph__seal,
@@ -7335,6 +7341,7 @@ a.clt-icon-disc:hover svg,
   margin-left: 0.15rem;
   fill: currentColor;
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--clt-brass-rgb) 45%, transparent));
+  transition: filter var(--dur-base) var(--ease);
 }
 
 .clt-play:hover .clt-play__disc,

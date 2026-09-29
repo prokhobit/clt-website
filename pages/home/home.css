@@ -1471,6 +1471,11 @@ dialog.clt-dialog.is-poster {
   }
 }
 
+/* Venue link: its colour change had no transition */
+.home-show__venue-link {
+  transition: color var(--dur-base) var(--ease), text-decoration-color var(--dur-base) var(--ease);
+}
+
 .home-show__accolade {
   margin: 0;
   text-align: center;
