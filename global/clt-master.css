@@ -373,6 +373,36 @@ p {
   color: transparent;
 }
 
+/* background-clip:text only paints inside the element's own box, and Gloock's ink
+   runs past it: the left of a "w", the tails of y/g/commas under a tight line-height.
+   Pad the paint box and take the room back with zero-specificity margins, so the
+   text doesn't move. Foil inside a split title is left as it is — SplitText reads
+   those boxes to group words into lines — and its word pieces get the room instead. */
+.clt-text-foil:not([data-clt-split] *),
+.clt-text-foil .clt-text-foil {
+  padding-inline: 0.1em;
+}
+
+:where(.clt-text-foil:not([data-clt-split] *), .clt-text-foil .clt-text-foil) {
+  margin-inline: -0.1em;
+}
+
+/* Room below for descenders where the box is tighter than the ink: SplitText's
+   one-box-per-word pieces (the class lands after splitting) and block-level foil in a
+   tight line-height. Not on inline foil in general — its paint box already covers the
+   ink. Bottom only: SplitText groups words into lines by their box tops, so a
+   piece whose top moved would start a line of its own. */
+.clt-text-foil .clt-text-foil,
+.clt-tier__amount.clt-text-foil,
+.pfs-h2 .clt-text-foil,
+.yap-plaque__mark .clt-text-foil {
+  padding-bottom: 0.22em;
+}
+
+:where(.clt-text-foil .clt-text-foil, .clt-tier__amount.clt-text-foil, .pfs-h2 .clt-text-foil, .yap-plaque__mark .clt-text-foil) {
+  margin-bottom: -0.22em;
+}
+
 .clt-text-glow {
   text-shadow: var(--glow-letter);
 }
@@ -3600,8 +3630,9 @@ a.clt-card:hover {
 
 .clt-split-line {
   overflow: clip;
-  padding-bottom: 0.1em;
-  margin-bottom: -0.1em;
+  /* room for descenders inside the reveal mask */
+  padding-bottom: 0.24em;
+  margin-bottom: -0.24em;
 }
 
 [data-gsap~='clt-magnetic'],

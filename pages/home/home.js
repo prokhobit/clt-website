@@ -1195,17 +1195,24 @@ window.CLT_HERO_FRAMES = [
       if (position >= startLeft() + setWidth) position -= setWidth;
       rail.scrollLeft = position;
       written = rail.scrollLeft;
+      // scrollLeft only lands on whole pixels; carry the remainder on the items
+      // so the drift glides instead of stepping 1px at a time.
+      rail.style.setProperty("--drift-x", (written - position).toFixed(2) + "px");
     }
     function syncDrift() {
       win.clearTimeout(idleTimer);
       var run = driftAllowed();
-      rail.classList.toggle("is-drifting", run);
+      // Snapping stays off through a pause (hover, a finger scrolling the page):
+      // turning it back on mid-drift yanks the rail to the nearest card. It comes
+      // back when the visitor scrolls the rail themselves (see the scroll listener).
+      if (run) rail.classList.add("is-drifting");
       if (run && !stopTick) {
         position = rail.scrollLeft;
         stopTick = addTick(tick);
       } else if (!run && stopTick) {
         stopTick();
         stopTick = null;
+        rail.style.removeProperty("--drift-x");
       }
       if (!run && canLoop && !stopped) {
         var wait = resumeAt - performance.now();
@@ -1224,7 +1231,10 @@ window.CLT_HERO_FRAMES = [
         if (written !== null && Math.abs(rail.scrollLeft - written) < 1) {
         } else {
           written = null;
-          if (!stopTick) interact();
+          if (!stopTick) {
+            rail.classList.remove("is-drifting");
+            interact();
+          }
         }
         if (!frame) frame = win.requestAnimationFrame(update);
       },
@@ -1235,8 +1245,10 @@ window.CLT_HERO_FRAMES = [
         wrap();
       }
     });
+    // Pause under the pointer only over the posters: the whole section fills
+    // ~97% of a desktop viewport, so hovering it meant the drift never ran.
     listen(
-      section,
+      rail,
       "pointerenter",
       function (e) {
         if (e.pointerType === "mouse") {
@@ -1247,7 +1259,7 @@ window.CLT_HERO_FRAMES = [
       { passive: true },
     );
     listen(
-      section,
+      rail,
       "pointerleave",
       function (e) {
         if (e.pointerType === "mouse") {
@@ -1276,8 +1288,14 @@ window.CLT_HERO_FRAMES = [
       { passive: true },
     );
     listen(rail, "wheel", interact, { passive: true });
-    listen(section, "focusin", function () {
-      focused = true;
+    // Keyboard focus pauses; a mouse click on Prev/Next doesn't (it used to
+    // leave the drift paused until the visitor clicked somewhere else).
+    listen(section, "focusin", function (e) {
+      try {
+        focused = e.target.matches(":focus-visible");
+      } catch (err) {
+        focused = true;
+      }
       syncDrift();
     });
     listen(section, "focusout", function (e) {
@@ -1306,6 +1324,8 @@ window.CLT_HERO_FRAMES = [
         );
         resumeAt = 0;
         syncDrift();
+        // Paused: come to rest on the nearest poster rather than between two.
+        if (stopped) goTo(nearest());
       });
     }
     listen(rail, "keydown", function (e) {
@@ -1593,6 +1613,7 @@ window.CLT_HERO_FRAMES = [
       win.clearTimeout(timer);
       frame = timer = 0;
       previous = null;
+      track.style.translate = "none";
     }
     function allowed() {
       return (
@@ -1612,6 +1633,9 @@ window.CLT_HERO_FRAMES = [
     function write(value) {
       viewport.scrollLeft = value;
       written = viewport.scrollLeft;
+      // scrollLeft lands on whole pixels; the track carries the remainder so the
+      // glide is smooth instead of stepping 1px at a time.
+      track.style.translate = (written - value).toFixed(2) + "px 0";
     }
     function tick(now) {
       frame = 0;
