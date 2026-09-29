@@ -1361,70 +1361,89 @@ dialog.clt-dialog.is-poster {
   translate: var(--drift-x, 0px) 0;
 }
 
-/* Progress: a small stage lamp riding a brass wire, its light rising upward. home.js sets
-   --progress (0–1) on the meter; the lamp fades out at both ends so the loop's wrap from
-   the last poster back to the first is never seen. */
+/* Progress: a full-length stage lamp. The wire and a faint glow run its whole width; the
+   filament lights from the left up to --progress (set by home.js, 0–1) with a hot head,
+   the light rising above the lit part, and the whole lamp brightens toward the end. --p
+   eases after --progress, so the loop's wrap reads as the lamp dimming and starting over. */
+@property --p {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
 .home-archive__controls {
   padding-top: 1.6rem;
 }
 
 .home-archive .home-archive__meter {
-  --meter-w: min(16rem, 56vw);
+  --meter-w: min(20rem, 72vw);
+  --lamp-rgb: var(--clt-candle-rgb);
+  --p: var(--progress, 0);
+  --level: calc(0.55 + 0.45 * var(--p));
   position: relative;
   width: var(--meter-w);
   height: 1px;
   border-radius: 0;
   overflow: visible;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--clt-brass-rgb) 34%, transparent) 18%, color-mix(in srgb, var(--clt-brass-rgb) 34%, transparent) 82%, transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--clt-brass-rgb) 34%, transparent) 10%, color-mix(in srgb, var(--clt-brass-rgb) 34%, transparent) 90%, transparent);
+  transition: --p 0.45s linear;
+}
+
+/* the unlit lamp: a faint glow along the whole wire, so it reads full-size from the start */
+.home-archive .home-archive__meter::before {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 2.25rem;
+  pointer-events: none;
+  background: linear-gradient(0deg, color-mix(in srgb, var(--lamp-rgb) 10%, transparent), transparent);
+  filter: blur(6px);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
 }
 
 .home-archive .home-archive__meter-fill {
-  --lamp-rgb: var(--clt-candle-rgb);
   position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 9rem;
+  inset: auto 0 0;
+  width: auto;
   height: 3.25rem;
   pointer-events: none;
   background: none;
   box-shadow: none;
-  transform: translateX(calc(var(--progress, 0) * var(--meter-w) - 50%));
-  opacity: clamp(0, min(var(--progress, 0) * 9, (1 - var(--progress, 0)) * 9), 1);
+  transform: none;
+  opacity: var(--level);
 }
 
-/* the beam */
+/* the light rising above the lit part, strongest at the head */
 .home-archive .home-archive__meter-fill::before {
   content: '';
   position: absolute;
   inset: 0;
   transform-origin: 50% 100%;
-  background: radial-gradient(38% 95% at 50% 100%, color-mix(in srgb, var(--lamp-rgb) 40%, transparent), transparent 72%), conic-gradient(from 0deg at 50% 100%, color-mix(in srgb, var(--lamp-rgb) 24%, transparent) 0deg, transparent 28deg, transparent 332deg, color-mix(in srgb, var(--lamp-rgb) 24%, transparent) 360deg);
-  filter: blur(7px);
-  -webkit-mask-image: radial-gradient(60% 100% at 50% 100%, #000 30%, transparent 85%);
-  mask-image: radial-gradient(60% 100% at 50% 100%, #000 30%, transparent 85%);
+  background: radial-gradient(3.5rem 3.1rem at min(calc(var(--p) * 100%), 93%) 100%, color-mix(in srgb, var(--lamp-rgb) 42%, transparent), transparent 72%), linear-gradient(0deg, color-mix(in srgb, var(--lamp-rgb) 26%, transparent), color-mix(in srgb, var(--lamp-rgb) 8%, transparent) 50%, transparent);
+  filter: blur(6px);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 min(calc(var(--p) * 100% - 2%), 88%), transparent min(calc(var(--p) * 100% + 9%), 100%));
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 min(calc(var(--p) * 100% - 2%), 88%), transparent min(calc(var(--p) * 100% + 9%), 100%));
   animation: home-meter-beam 5.5s ease-in-out infinite;
 }
 
-/* the filament */
+/* the filament: warm trail, white-hot head, dark beyond */
 .home-archive .home-archive__meter-fill::after {
   content: '';
   position: absolute;
-  left: 50%;
-  bottom: -0.5px;
-  width: 4.5rem;
+  inset: auto 0 -0.5px;
   height: 2px;
-  transform: translateX(-50%);
   border-radius: 2px;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--lamp-rgb) 64%, transparent) 18%, var(--clt-filament) 50%, color-mix(in srgb, var(--lamp-rgb) 64%, transparent) 82%, transparent);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--lamp-rgb) 52%, transparent), 0 0 22px color-mix(in srgb, var(--lamp-rgb) 22%, transparent);
-  animation: clt-lamp-line-pulse 6.5s ease-in-out infinite;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--lamp-rgb) 30%, transparent) 4%, color-mix(in srgb, var(--lamp-rgb) 72%, transparent) calc(var(--p) * 100% - 12%), var(--clt-filament) min(calc(var(--p) * 100% - 1%), 93%), color-mix(in srgb, var(--lamp-rgb) 40%, transparent) min(calc(var(--p) * 100% + 1%), 96%), transparent min(calc(var(--p) * 100% + 6%), 100%));
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--lamp-rgb) 60%, transparent)) drop-shadow(0 0 12px color-mix(in srgb, var(--lamp-rgb) 28%, transparent));
+  animation: home-meter-filament 6.5s ease-in-out infinite;
 }
 
 @keyframes home-meter-beam {
   0%,
   100% {
-    opacity: 0.7;
-    transform: scaleY(0.9);
+    opacity: 0.72;
+    transform: scaleY(0.92);
   }
   50% {
     opacity: 1;
@@ -1432,10 +1451,19 @@ dialog.clt-dialog.is-poster {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  /* no loop without motion, so no wrap to hide */
-  .home-archive .home-archive__meter-fill {
+@keyframes home-meter-filament {
+  0%,
+  100% {
     opacity: 1;
+  }
+  50% {
+    opacity: 0.86;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-archive .home-archive__meter {
+    transition: none;
   }
   .home-archive .home-archive__meter-fill::before,
   .home-archive .home-archive__meter-fill::after {
