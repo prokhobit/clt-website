@@ -850,22 +850,16 @@ section.clt-home-explore::before {
   --glow: calc(var(--lit) * var(--ignite));
   flex: 0 0 var(--card-w);
   scroll-snap-align: center;
-  translate: var(--drift-x, 0px) 0;
 }
 
-/* Noir cards (the poster-stage black), rounded like the other person cards */
-.home-archive .home-archive__card {
+.home-archive .clt-person-card,
+.home-archive .clt-person-card__portrait,
+.home-archive .clt-person-card > .clt-lamp-layer {
+  border-radius: 0;
+}
+
+.home-archive__card {
   height: 100%;
-  background: radial-gradient(ellipse 90% 45% at 50% 0%, rgb(255 244 218 / 0.05), transparent 70%), var(--clt-pitch);
-}
-
-.home-archive .home-archive__card:not(:hover):not(:focus-within) {
-  border-color: color-mix(in srgb, var(--clt-linen-rgb) 6%, transparent);
-  box-shadow: inset 0 1px 0 rgb(255 244 218 / 0.08), inset 0 -1px 0 rgb(0 0 0 / 0.6), inset 0 0 80px rgb(0 0 0 / 0.6), 0 14px 32px rgb(0 0 0 / 0.5);
-}
-
-.home-archive .home-archive__poster {
-  background: #000;
 }
 
 .home-archive__card > .clt-lamp-layer {
@@ -1340,6 +1334,31 @@ dialog.clt-dialog.is-poster {
   .home-show__stage .home-show__art::after {
     transition: none;
   }
+}
+
+/* Past Productions: noir cards (the poster-stage black), rounded like the other person
+   cards; the drift's sub-pixel remainder rides on the items (set by home.js). */
+.home-archive .home-archive__card {
+  border-radius: var(--r-card);
+  background: radial-gradient(ellipse 90% 45% at 50% 0%, rgb(255 244 218 / 0.05), transparent 70%), var(--clt-pitch);
+}
+
+.home-archive .home-archive__card:not(:hover):not(:focus-within) {
+  border-color: color-mix(in srgb, var(--clt-linen-rgb) 6%, transparent);
+  box-shadow: inset 0 1px 0 rgb(255 244 218 / 0.08), inset 0 -1px 0 rgb(0 0 0 / 0.6), inset 0 0 80px rgb(0 0 0 / 0.6), 0 14px 32px rgb(0 0 0 / 0.5);
+}
+
+.home-archive .home-archive__card > .clt-lamp-layer {
+  border-radius: inherit;
+}
+
+.home-archive .home-archive__poster {
+  border-radius: calc(var(--r-card) - 0.5rem);
+  background: #000;
+}
+
+.home-archive__rail > .home-archive__item {
+  translate: var(--drift-x, 0px) 0;
 }
 
 .home-show__accolade {

@@ -18,7 +18,7 @@ Anything that runs on the site should match a file here.
 | File | Used by |
 | --- | --- |
 | `pages/<page>/<page>.css` | That page's Code Embeds |
-| `pages/<page>/<page>.js` | That page → Before `</body>` (GitHub Pages or inline) |
+| `pages/<page>/<page>.js` | That page → Before `</body>`. Home: jsDelivr, pinned to the release tag. Others: GitHub Pages (`main`, live on push) or inline |
 | `pages/shared/performances.js` | Site settings → Footer code, via jsDelivr (Home + Events) |
 | `pages/about-us/about-team-cms.js` | Inline in About → Before `</body>` |
 
