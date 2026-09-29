@@ -1361,6 +1361,88 @@ dialog.clt-dialog.is-poster {
   translate: var(--drift-x, 0px) 0;
 }
 
+/* Progress: a small stage lamp riding a brass wire, its light rising upward. home.js sets
+   --progress (0–1) on the meter; the lamp fades out at both ends so the loop's wrap from
+   the last poster back to the first is never seen. */
+.home-archive__controls {
+  padding-top: 1.6rem;
+}
+
+.home-archive .home-archive__meter {
+  --meter-w: min(16rem, 56vw);
+  position: relative;
+  width: var(--meter-w);
+  height: 1px;
+  border-radius: 0;
+  overflow: visible;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--clt-brass-rgb) 34%, transparent) 18%, color-mix(in srgb, var(--clt-brass-rgb) 34%, transparent) 82%, transparent);
+}
+
+.home-archive .home-archive__meter-fill {
+  --lamp-rgb: var(--clt-candle-rgb);
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 9rem;
+  height: 3.25rem;
+  pointer-events: none;
+  background: none;
+  box-shadow: none;
+  transform: translateX(calc(var(--progress, 0) * var(--meter-w) - 50%));
+  opacity: clamp(0, min(var(--progress, 0) * 9, (1 - var(--progress, 0)) * 9), 1);
+}
+
+/* the beam */
+.home-archive .home-archive__meter-fill::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 100%;
+  background: radial-gradient(38% 95% at 50% 100%, color-mix(in srgb, var(--lamp-rgb) 40%, transparent), transparent 72%), conic-gradient(from 0deg at 50% 100%, color-mix(in srgb, var(--lamp-rgb) 24%, transparent) 0deg, transparent 28deg, transparent 332deg, color-mix(in srgb, var(--lamp-rgb) 24%, transparent) 360deg);
+  filter: blur(7px);
+  -webkit-mask-image: radial-gradient(60% 100% at 50% 100%, #000 30%, transparent 85%);
+  mask-image: radial-gradient(60% 100% at 50% 100%, #000 30%, transparent 85%);
+  animation: home-meter-beam 5.5s ease-in-out infinite;
+}
+
+/* the filament */
+.home-archive .home-archive__meter-fill::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -0.5px;
+  width: 4.5rem;
+  height: 2px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--lamp-rgb) 64%, transparent) 18%, var(--clt-filament) 50%, color-mix(in srgb, var(--lamp-rgb) 64%, transparent) 82%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--lamp-rgb) 52%, transparent), 0 0 22px color-mix(in srgb, var(--lamp-rgb) 22%, transparent);
+  animation: clt-lamp-line-pulse 6.5s ease-in-out infinite;
+}
+
+@keyframes home-meter-beam {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scaleY(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* no loop without motion, so no wrap to hide */
+  .home-archive .home-archive__meter-fill {
+    opacity: 1;
+  }
+  .home-archive .home-archive__meter-fill::before,
+  .home-archive .home-archive__meter-fill::after {
+    animation: none;
+  }
+}
+
 .home-show__accolade {
   margin: 0;
   text-align: center;

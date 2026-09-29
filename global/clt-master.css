@@ -835,7 +835,11 @@ kbd {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background: radial-gradient(ellipse 50% 60% at 50% 0%, color-mix(in srgb, var(--clt-candle-rgb) 18%, transparent), transparent 60%), radial-gradient(ellipse 90% 50% at 50% 100%, color-mix(in srgb, var(--clt-velvet-rgb) 28%, transparent), transparent 70%);
+  /* The glows sit just inside the section and its top/bottom are feathered: anchored on the
+     edges they were brightest exactly where the section ends, which read as a hard line. */
+  background: radial-gradient(ellipse 50% 60% at 50% 10%, color-mix(in srgb, var(--clt-candle-rgb) 22%, transparent), transparent 60%), radial-gradient(ellipse 90% 50% at 50% 90%, color-mix(in srgb, var(--clt-velvet-rgb) 32%, transparent), transparent 70%);
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 16%, #000 84%, transparent);
+  mask-image: linear-gradient(180deg, transparent, #000 16%, #000 84%, transparent);
   filter: blur(2px);
 }
 
