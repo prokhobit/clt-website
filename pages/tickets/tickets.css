@@ -1,4 +1,4 @@
-/* CLT · TICKETS — page CSS (/tickets). Lives in the page's "Tickets Code" embed; this file is the source. */
+/* CLT · TICKETS — page CSS (/tickets). Loaded from jsDelivr in the page's head code (pinned to the release tag). */
 
 .tk-main {
   position: relative;
@@ -62,6 +62,7 @@
 
 .tk-date {
   display: grid;
+  text-align: left;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 1.1rem;
