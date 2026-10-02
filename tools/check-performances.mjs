@@ -40,6 +40,7 @@ ws.onmessage = (m) => {
 };
 await send("Runtime.enable");
 await send("Fetch.enable", { patterns: Object.keys(swap).map((k) => ({ urlPattern: `*${k}*` })) });
+await send("Page.enable");
 if (ticketsOn) await send("Page.addScriptToEvaluateOnNewDocument", { source: "window.CLT_TICKETS_URL='/tickets';" });
 const summary = `JSON.stringify([...document.querySelectorAll('[data-ev-row]')].map(r => ({
   date: r.getAttribute('data-date'), status: r.getAttribute('data-status'),
@@ -54,6 +55,22 @@ for (const path of ["/", "/events"]) {
   await sleep(7000);
   const r = await send("Runtime.evaluate", { expression: summary, returnByValue: true });
   console.log(`== ${path}\n${r.result.value}\nerrors: ${errors.length ? errors.join(" | ") : "none"}`);
+  const shots = process.argv.indexOf("--shots");
+  if (shots > -1) {
+    // Screenshot the dates list (document coordinates, page scrolled to it first).
+    const box = await send("Runtime.evaluate", { returnByValue: true, awaitPromise: true, expression: `(async () => {
+      const list = document.querySelector('[data-ev-row]').parentElement;
+      const y = list.getBoundingClientRect().top + scrollY - 120;
+      (window.CLT && CLT.scrollTo) ? CLT.scrollTo(y, { immediate: true }) : scrollTo(0, y);
+      await new Promise((r) => setTimeout(r, 2500));
+      const b = list.getBoundingClientRect();
+      return { x: b.left - 24, y: b.top + scrollY - 24, width: b.width + 48, height: b.height + 48 };
+    })()` });
+    const shot = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: { ...box.result.value, scale: 1 } });
+    const file = join(process.argv[shots + 1], `perf${path.replace(/\W/g, "-") || "-home"}.png`);
+    (await import("node:fs")).writeFileSync(file, Buffer.from(shot.data, "base64"));
+    console.log("shot:", file);
+  }
 }
 chrome.kill();
 process.exit(0);
