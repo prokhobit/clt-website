@@ -188,7 +188,7 @@
       var empty = el("div", "tk-picker__empty");
       empty.appendChild(el("p", "", "There are no upcoming performances right now."));
       var a = el("a", "clt-link", "Write to us to hear about the next one");
-      a.href = "/events#reserve";
+      a.href = "/contact?topic=tickets";
       empty.appendChild(a);
       picker.appendChild(empty);
       return;

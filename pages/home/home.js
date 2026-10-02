@@ -962,6 +962,33 @@ window.CLT_HERO_FRAMES = [
   }
 
   // ── Show — the upcoming production ───────────────────────────────────────
+  // Dates → "Nov 7–8, 2026 · Jan 9–10, 2027": consecutive days in one month
+  // collapse into a range; the year closes each run.
+  function dateRuns(dates) {
+    var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    var days = dates
+      .map(function (d) { return d.getTime(); })
+      .sort(function (a, b) { return a - b; })
+      .filter(function (t, i, all) { return i === 0 || t !== all[i - 1]; })
+      .map(function (t) { return new Date(t); });
+    var runs = [];
+    days.forEach(function (d) {
+      var run = runs[runs.length - 1];
+      var last = run && run[run.length - 1];
+      if (last && last.getMonth() === d.getMonth() && last.getFullYear() === d.getFullYear() &&
+          Math.round((d - last) / 864e5) === 1) run.push(d);
+      else runs.push([d]);
+    });
+    return runs
+      .map(function (run) {
+        var a = run[0];
+        var b = run[run.length - 1];
+        return MON[a.getMonth()] + " " + a.getDate() +
+          (run.length > 1 ? "–" + b.getDate() : "") + ", " + a.getFullYear();
+      })
+      .join(" · ");
+  }
+
   function initShow() {
     var gsap = state.gsap;
     var ScrollTrigger = state.ScrollTrigger;
@@ -983,6 +1010,14 @@ window.CLT_HERO_FRAMES = [
     });
     var countdown = query("[data-home-countdown]", section);
     var closed = query("[data-home-closed]", section);
+    var when = query("[data-home-when]", section);
+    var whenText = dateRuns(
+      upcoming
+        .map(function (item) { return item.__cltDate; })
+        .filter(Boolean),
+    );
+    if (when && whenText) when.textContent = whenText;
+    if (when && dated.length && !upcoming.length) when.hidden = true;
     if (upcoming.length) {
       var next = upcoming[0];
       next.classList.add("is-next");
