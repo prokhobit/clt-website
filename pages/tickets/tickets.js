@@ -289,7 +289,7 @@
     sc.setAttribute("data-type", "inline");
     sc.setAttribute("data-inline-minimal", "true");
     sc.setAttribute("data-inline-show-logo", "false");
-    sc.setAttribute("data-inline-bg-fill", "false");
+    sc.setAttribute("data-inline-bg-fill", "true");
     sc.setAttribute("data-inline-ref", REF);
     Object.keys(COLORS).forEach(function (k) { sc.setAttribute("data-inline-color-" + k, COLORS[k]); });
     w.appendChild(sc);

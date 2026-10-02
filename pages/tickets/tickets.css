@@ -337,7 +337,10 @@
 .tk-checkout iframe {
   display: block;
   width: 100% !important;
+  max-width: 60rem !important; /* Ticket Tailor caps it at 700px */
+  margin-inline: auto;
   border: 0;
+  border-radius: var(--r-field);
 }
 
 .tk-checkout__loading {
