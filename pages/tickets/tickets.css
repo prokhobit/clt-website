@@ -1,0 +1,589 @@
+/* CLT · TICKETS — page CSS (/tickets). Lives in the page's "Tickets Code" embed; this file is the source. */
+
+.tk-main {
+  position: relative;
+  z-index: 2;
+}
+
+.tk-section {
+  position: relative;
+  padding-block: clamp(4rem, 8vw, 7rem);
+  scroll-margin-top: clamp(5rem, 10vw, 7.5rem);
+}
+
+.tk-section .clt-section-header {
+  margin-inline: auto;
+  text-align: center;
+  justify-items: center;
+}
+
+/* ── Step 1 · performances ─────────────────────────────────────────────── */
+.tk-picker {
+  display: grid;
+  gap: clamp(2rem, 4vw, 3rem);
+  max-width: 64rem;
+  margin: clamp(2.25rem, 4.5vw, 3.5rem) auto 0;
+}
+
+.tk-production__title {
+  margin: 0 0 1rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 1.1rem + 1vw, 1.9rem);
+  color: var(--clt-linen-100);
+}
+
+.tk-month + .tk-month {
+  margin-top: clamp(1.75rem, 3.5vw, 2.5rem);
+}
+
+.tk-month__label {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin: 0 0 0.9rem;
+  font: 800 0.68rem/1 var(--font-body);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--clt-brass-300);
+}
+
+.tk-month__label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--clt-brass-rgb) 40%, transparent), transparent);
+}
+
+.tk-dates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 27rem), 1fr));
+  gap: 0.85rem;
+}
+
+.tk-date {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1.1rem;
+  padding: 1rem 1.15rem;
+  border-radius: var(--r-card);
+  border: 1px solid var(--line-soft);
+  background: var(--carve-ground);
+  box-shadow: var(--carve-rest), var(--carve-ring);
+  transition: border-color 420ms var(--ease), box-shadow 540ms var(--ease-stage), opacity 380ms var(--ease);
+}
+
+.tk-date .tk-date__badge {
+  width: 4rem;
+  padding-block: 0.55rem;
+}
+
+.tk-date__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  color: var(--clt-linen-100);
+}
+
+.tk-date.is-next .tk-date__title::after {
+  content: "Next";
+  display: inline-block;
+  margin-left: 0.6rem;
+  padding: 0.2rem 0.5rem;
+  vertical-align: 0.2em;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-brass);
+  color: var(--clt-brass-100);
+  font: 700 0.55rem/1 var(--font-body);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.tk-date__note {
+  margin: 0.25rem 0 0;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.tk-date.is-selected {
+  border-color: color-mix(in srgb, var(--clt-brass-rgb) 60%, transparent);
+  box-shadow: var(--carve-rest), var(--carve-ring), 0 0 32px color-mix(in srgb, var(--clt-candle-rgb) 16%, transparent);
+}
+
+.tk-date.is-closed {
+  opacity: 0.55;
+}
+
+.tk-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.tk-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.6rem;
+  padding: 0.45rem 1rem;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-soft);
+  background: rgb(0 0 0 / 0.3);
+  color: var(--clt-linen-100);
+  font: 600 0.95rem/1 var(--font-body);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color 380ms var(--ease), background 420ms var(--ease), color 380ms var(--ease), box-shadow 540ms var(--ease-stage);
+}
+
+.tk-time:hover {
+  border-color: color-mix(in srgb, var(--clt-brass-rgb) 55%, transparent);
+  background: color-mix(in srgb, var(--clt-brass-rgb) 10%, transparent);
+  color: var(--clt-brass-100);
+}
+
+.tk-time:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.tk-time[aria-pressed="true"] {
+  border-color: var(--clt-brass-200);
+  background: linear-gradient(180deg, var(--clt-brass-100), var(--clt-brass-200));
+  color: var(--clt-brass-ink, #1c130b);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--clt-candle-rgb) 30%, transparent);
+}
+
+.tk-time__tag {
+  padding: 0.2rem 0.45rem;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-brass);
+  color: var(--clt-brass-100);
+  font: 700 0.55rem/1 var(--font-body);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.tk-time[aria-pressed="true"] .tk-time__tag {
+  border-color: rgb(28 19 11 / 0.4);
+  color: inherit;
+}
+
+.tk-time:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.tk-time.is-closed .tk-time__clock {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.tk-picker__empty {
+  padding: 1.25rem 1.5rem;
+  border-radius: var(--r-card);
+  border: 1px dashed var(--line-soft);
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.tk-picker__empty p {
+  margin: 0 0 0.5rem;
+}
+
+/* CMS rows: plain links until the script builds the picker */
+.tk-source {
+  max-width: 40rem;
+  margin: 2rem auto 0;
+}
+
+.tk-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.tk-row p {
+  margin: 0;
+}
+
+.tk-row [data-tk-status],
+.tk-row [data-tk-id],
+.tk-row [data-tk-production],
+.tk-row [data-tk-sales],
+.tk-row [data-tk-note],
+.tk-row [data-tk-override] {
+  display: none;
+}
+
+.tk-row [data-tk-date] {
+  font-family: var(--font-display);
+  color: var(--clt-linen-100);
+}
+
+.tk-row [data-tk-checkout] {
+  margin-left: auto;
+  color: var(--clt-brass-100);
+}
+
+[data-tk-pick].is-hydrated .tk-source {
+  display: none;
+}
+
+/* ── Step 2 · the stage panel ──────────────────────────────────────────── */
+.clt-panel.is-noir.tk-stage {
+  position: relative;
+  max-width: 76rem;
+  margin: clamp(2.25rem, 4.5vw, 3.5rem) auto 0;
+  padding: clamp(3.25rem, 6vw, 4.5rem) clamp(1rem, 3vw, 2.5rem) clamp(1.25rem, 3vw, 2rem);
+  border-radius: var(--r-shell);
+  overflow: hidden;
+  isolation: isolate;
+  background: radial-gradient(ellipse 70% 40% at 50% 100%, color-mix(in srgb, var(--clt-velvet-rgb) 16%, transparent), transparent 70%), linear-gradient(180deg, rgb(0 0 0 / 0.42), rgb(0 0 0 / 0.2)), var(--clt-pitch);
+  border: 1px solid color-mix(in srgb, var(--clt-linen-rgb) 6%, transparent);
+  box-shadow: inset 0 3px 10px rgb(0 0 0 / 0.7), inset 0 0 90px rgb(0 0 0 / 0.65), inset 0 -1px 0 rgb(255 244 218 / 0.06), var(--carve-ring), 0 24px 60px rgb(0 0 0 / 0.5);
+}
+
+.clt-panel.is-noir.tk-stage::before {
+  display: none;
+}
+
+.tk-stage > .clt-lamp-layer {
+  height: 60%;
+  z-index: 0;
+  opacity: 0.45;
+  transition: opacity 1.2s var(--ease-stage);
+}
+
+.tk-stage.is-lit > .clt-lamp-layer {
+  opacity: 1;
+}
+
+.tk-stage > :not(.clt-lamp-layer) {
+  position: relative;
+  z-index: 1;
+}
+
+.tk-stage__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  padding: 0 clamp(0.25rem, 1vw, 0.75rem) clamp(1rem, 2vw, 1.4rem);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.tk-stage__kicker {
+  margin: 0;
+  font: 800 0.62rem/1 var(--font-body);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--clt-brass-300);
+}
+
+.tk-stage__show {
+  margin: 0.35rem 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 1rem + 1vw, 1.7rem);
+  color: var(--clt-linen-100);
+}
+
+.tk-stage:not(.is-lit) .tk-stage__change {
+  visibility: hidden;
+}
+
+.tk-stage__body {
+  position: relative;
+  min-height: clamp(18rem, 40vw, 28rem);
+  padding-top: clamp(1rem, 2vw, 1.5rem);
+  outline: none;
+}
+
+.tk-stage__empty {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.4rem;
+  min-height: inherit;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.tk-stage__empty p {
+  margin: 0;
+  max-width: 34ch;
+}
+
+.tk-stage__empty-title {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  color: var(--clt-linen-200);
+}
+
+.tk-stage.is-lit .tk-stage__empty {
+  display: none;
+}
+
+.tk-checkout .tt-widget-fallback {
+  display: none;
+}
+
+.tk-checkout iframe {
+  display: block;
+  width: 100% !important;
+  border: 0;
+}
+
+.tk-checkout__loading {
+  display: grid;
+  place-content: center;
+  min-height: 14rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.tk-checkout__loading::before {
+  content: "";
+  justify-self: center;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-bottom: 0.8rem;
+  border-radius: 50%;
+  background: var(--clt-candle);
+  box-shadow: 0 0 12px var(--clt-candle);
+  animation: tk-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes tk-pulse {
+  50% { opacity: 0.3; }
+}
+
+.tk-fallback {
+  display: grid;
+  justify-items: center;
+  gap: 0.9rem;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.tk-fallback p {
+  margin: 0;
+}
+
+.tk-stage__phone {
+  display: none;
+}
+
+.tk-stage__foot {
+  margin: clamp(1rem, 2vw, 1.4rem) 0 0;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line-soft);
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.tk-stage__foot a {
+  color: var(--clt-brass-100);
+}
+
+/* Phones: the panel holds the choice; the checkout opens full-screen. */
+@media (max-width: 47.999rem) {
+  .tk-stage__body {
+    min-height: 0;
+  }
+  .tk-stage.is-phone-ready .tk-stage__phone {
+    display: grid;
+    justify-items: center;
+    gap: 0.75rem;
+    padding: 1.5rem 0 0.5rem;
+    text-align: center;
+    color: var(--text-dim);
+  }
+  .tk-stage.is-phone-ready .tk-stage__phone p {
+    margin: 0;
+  }
+  .tk-stage__phone .clt-button {
+    width: 100%;
+    justify-content: center;
+  }
+  .tk-stage__empty {
+    min-height: 10rem;
+  }
+}
+
+dialog.clt-dialog.tk-sheet {
+  width: min(64rem, 100vw);
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  inset: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--clt-pitch);
+}
+
+dialog.clt-dialog.tk-sheet[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.tk-sheet__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: max(0.85rem, env(safe-area-inset-top)) 1rem 0.85rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.tk-sheet__show {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--clt-linen-100);
+}
+
+.tk-sheet .clt-dialog__close {
+  position: static;
+  flex: none;
+}
+
+.tk-sheet__body {
+  flex: 1;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 0.5rem 0.5rem max(1rem, env(safe-area-inset-bottom));
+}
+
+/* ── Venue, seating and FAQ ────────────────────────────────────────────── */
+.tk-venue__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: clamp(1.25rem, 3vw, 2rem);
+  max-width: 76rem;
+  margin: clamp(2.25rem, 4.5vw, 3.5rem) auto 0;
+  align-items: start;
+}
+
+.tk-card {
+  padding: clamp(1.4rem, 3vw, 2.25rem);
+  border-radius: var(--r-card);
+  border: 1px solid var(--line-soft);
+  background: var(--carve-ground);
+  box-shadow: var(--carve-rest), var(--carve-ring);
+}
+
+.tk-card__title {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.3rem, 1.1rem + 0.6vw, 1.6rem);
+  color: var(--clt-linen-100);
+}
+
+.tk-card__addr {
+  margin: 0 0 1rem;
+  color: var(--text-dim);
+}
+
+.tk-facts {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tk-facts li {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line-soft);
+  color: var(--text-muted);
+  line-height: var(--leading-body);
+}
+
+.tk-facts b {
+  color: var(--clt-brass-100);
+  font: 700 0.66rem/1.6 var(--font-body);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.tk-plan {
+  margin: 0;
+}
+
+.tk-plan img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: calc(var(--r-card) - 0.4rem);
+}
+
+.tk-plan figcaption {
+  margin-top: 0.75rem;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.tk-faq {
+  max-width: 52rem;
+  margin: clamp(2.25rem, 4.5vw, 3.5rem) auto 0;
+}
+
+.tk-faq .clt-accordion-body {
+  padding: 0 clamp(1.25rem, 2vw, 1.75rem) clamp(1rem, 1.6vw, 1.4rem);
+  color: var(--text-muted);
+  line-height: var(--leading-body);
+}
+
+.tk-faq .clt-accordion-body p {
+  margin: 0 0 0.6rem;
+}
+
+@media (min-width: 62rem) {
+  .tk-venue__grid {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  }
+}
+
+@media (max-width: 47.999rem) {
+  .tk-main .clt-page-hero {
+    padding-top: 4.5rem;
+    text-align: left;
+  }
+  .tk-main .clt-page-hero__title,
+  .tk-main .clt-page-hero__lede {
+    margin-inline: 0;
+  }
+  .tk-main .clt-wrap {
+    padding-inline: 1.25rem;
+  }
+  .tk-date {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.85rem;
+    padding: 0.9rem;
+  }
+  .tk-facts li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-checkout__loading::before {
+    animation: none;
+  }
+}

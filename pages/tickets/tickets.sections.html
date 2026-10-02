@@ -1,0 +1,95 @@
+<!-- CLT · TICKETS — markup of the page's Code Embeds (source of truth; paste into Webflow).
+     Embed "tickets-seats": #seats + the phone dialog. Embed "tickets-venue": #venue + #faq. -->
+
+<!-- ===== tickets-seats ===== -->
+<section id="seats" class="tk-section tk-seats" aria-labelledby="tk-seats-title" data-clt-house="">
+  <div class="clt-wrap">
+    <header class="clt-section-header">
+      <span class="clt-eyebrow"><span>Step 2 · Seats</span></span>
+      <h2 id="tk-seats-title" class="clt-section-header__title">Choose your <span class="clt-text-foil">seats</span></h2>
+      <p class="clt-section-header__lede">Every ticket is a reserved seat. Pick yours on the map, then check out securely.</p>
+    </header>
+    <div class="tk-stage clt-panel is-noir" data-tk-stage="" data-clt-lamp-trigger="">
+      <div class="clt-lamp-layer is-animated" data-clt-lamp="" aria-hidden="true"></div>
+      <div class="tk-stage__bar">
+        <div>
+          <p class="tk-stage__kicker">Your performance</p>
+          <p class="tk-stage__show" data-tk-chosen="" aria-live="polite">Choose a performance above</p>
+        </div>
+        <a href="#performances" class="clt-button is-ghost is-small tk-stage__change"><span class="clt-button__text">Change performance</span></a>
+      </div>
+      <div class="tk-stage__body" data-tk-mount="" tabindex="-1" aria-label="Seat map and checkout">
+        <div class="tk-stage__empty">
+          <p class="tk-stage__empty-title">The house is still dark</p>
+          <p>Choose a date and time above, and the seat map opens here.</p>
+        </div>
+      </div>
+      <div class="tk-stage__phone">
+        <p>The seat map opens full screen.</p>
+        <button type="button" class="clt-button is-primary is-large" data-tk-open-sheet=""><span class="clt-button__text">Choose seats</span><span class="clt-button__arrow" aria-hidden="true">→</span></button>
+      </div>
+      <p class="tk-stage__foot">Secure checkout by Ticket Tailor on tickets.commonwealthlyrictheater.com · <a href="https://tickets.commonwealthlyrictheater.com/" target="_blank" rel="noopener" data-tk-newtab="">Open in a new tab</a></p>
+    </div>
+  </div>
+</section>
+<dialog id="tk-sheet" class="clt-dialog tk-sheet" aria-label="Choose your seats">
+  <div class="tk-sheet__bar">
+    <p class="tk-sheet__show" data-tk-sheet-show=""></p>
+    <button type="button" class="clt-dialog__close" data-close-dialog="" aria-label="Close the seat map"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div class="tk-sheet__body" data-tk-sheet-mount=""></div>
+</dialog>
+
+<!-- ===== tickets-venue ===== -->
+<section id="venue" class="tk-section tk-venue" aria-labelledby="tk-venue-title" data-clt-house="">
+  <div class="clt-wrap">
+    <header class="clt-section-header">
+      <span class="clt-eyebrow"><span>Venue · Seating</span></span>
+      <h2 id="tk-venue-title" class="clt-section-header__title">The <span class="clt-text-foil">Embassy Theater</span></h2>
+      <p class="clt-section-header__lede">An intimate house of nine rows, every seat reserved.</p>
+    </header>
+    <div class="tk-venue__grid">
+      <div class="tk-card">
+        <h3 class="tk-card__title">Embassy Theater · Waltham</h3>
+        <p class="tk-card__addr">16 Pine Street, Waltham, MA</p>
+        <a href="https://maps.google.com/?q=16+Pine+Street,+Waltham,+MA" target="_blank" rel="noopener" class="clt-button is-ghost is-small"><span class="clt-button__text">Directions</span></a>
+        <ul class="tk-facts" role="list">
+          <li><b>Shows</b><span>Two a day, at 1:00 and 4:00 pm · about 60 minutes</span></li>
+          <li><b>Ages</b><span>Recommended for ages 4 and up</span></li>
+          <li><b>Seating</b><span>Reserved seats. Rows A–C Premium $65 · D–F Standard $55 · H–I Value $45</span></li>
+          <li><b>Entrance</b><span>At the back of the house, on the right as you face the stage</span></li>
+        </ul>
+      </div>
+      <figure class="tk-card tk-plan">
+        <img src="https://cdn.prod.website-files.com/69daeaa84d0242f517ee1a64/6ac015a42a92449ce4eaed56_embassy-seating-plan.webp" width="1600" height="1300" loading="lazy" alt="Seating plan of the Embassy Theater: stage at the front, rows A to I. Rows A–C Premium $65, D–F Standard $55, H–I Value $45; row G is not on sale. Seat 1 is on the right as you face the stage. Entrance on the right wall behind row I.">
+        <figcaption>Seat 1 is on the right as you face the stage.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+<section id="faq" class="tk-section tk-faq-section" aria-labelledby="tk-faq-title" data-clt-house="">
+  <div class="clt-wrap">
+    <header class="clt-section-header">
+      <span class="clt-eyebrow"><span>Questions</span></span>
+      <h2 id="tk-faq-title" class="clt-section-header__title">Ticket <span class="clt-text-foil">FAQ</span></h2>
+    </header>
+    <div class="clt-accordion tk-faq">
+      <details class="clt-accordion-item">
+        <summary class="clt-accordion-summary">How do reserved seats work?</summary>
+        <div class="clt-accordion-body"><p>Every ticket is for a specific seat. Choose a performance, pick your seats on the map, and they are held for you while you check out. Rows A–C are Premium ($65), D–F Standard ($55) and H–I Value ($45).</p></div>
+      </details>
+      <details class="clt-accordion-item">
+        <summary class="clt-accordion-summary">How do I get my tickets?</summary>
+        <div class="clt-accordion-body"><p>Your e-tickets arrive by email as soon as you check out. Show them on your phone at the door, or print them.</p></div>
+      </details>
+      <details class="clt-accordion-item">
+        <summary class="clt-accordion-summary">How long is the show, and is it right for my child?</summary>
+        <div class="clt-accordion-body"><p>Pinocchio: The Musical runs about 60 minutes and is recommended for ages 4 and up.</p></div>
+      </details>
+      <details class="clt-accordion-item">
+        <summary class="clt-accordion-summary">Can I change or refund my tickets?</summary>
+        <div class="clt-accordion-body"><p>Write to us through the <a class="clt-link is-inline" href="/events#reserve">contact form</a> with your order details and we will help.</p></div>
+      </details>
+    </div>
+  </div>
+</section>

@@ -86,6 +86,10 @@
     return;
   }
 
+  // Shared with pages/tickets/tickets.js (loads after this file).
+  window.CLT_PERF = { parseDate: parseDate, parseTime: parseTime, timeSlug: timeSlug,
+    dateStatus: dateStatus, ticketsHref: ticketsHref };
+
   function text(row, sel) {
     var el = row.querySelector(sel);
     return el ? (el.textContent || "").trim() : "";
