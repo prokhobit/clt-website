@@ -1,4 +1,4 @@
-// node tools/check-performances.mjs [baseUrl] [--tickets]
+// node tools/check-performances.mjs [baseUrl] [--tickets] [--cdn] [--shots <dir>]
 // Loads Home + Events with the local performances.js / clt-master.css swapped in.
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const base = process.argv.find((a) => a.startsWith("http")) || "https://commonwealth-lyric-theater.webflow.io";
 const ticketsOn = process.argv.includes("--tickets");
+const useCdn = process.argv.includes("--cdn"); // test what jsDelivr serves, no local swap
 const swap = {
   "performances.min.js": ["application/javascript", readFileSync(join(root, "pages/shared/performances.js"), "utf8")],
   "clt-master.css": ["text/css", readFileSync(join(root, "global/clt-master.css"), "utf8")],
@@ -39,7 +40,7 @@ ws.onmessage = (m) => {
   }
 };
 await send("Runtime.enable");
-await send("Fetch.enable", { patterns: Object.keys(swap).map((k) => ({ urlPattern: `*${k}*` })) });
+if (!useCdn) await send("Fetch.enable", { patterns: Object.keys(swap).map((k) => ({ urlPattern: `*${k}*` })) });
 await send("Page.enable");
 if (ticketsOn) await send("Page.addScriptToEvaluateOnNewDocument", { source: "window.CLT_TICKETS_URL='/tickets';" });
 const summary = `JSON.stringify([...document.querySelectorAll('[data-ev-row]')].map(r => ({
