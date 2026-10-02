@@ -1,4 +1,4 @@
-// node tools/check-tickets.mjs [baseUrl] [--shots <dir>]
+// node tools/check-tickets.mjs [baseUrl] [--cdn] [--shots <dir>]
 // Loads staging /tickets with every clt-website@<tag> file served from this repo (so an unreleased
 // tag never hits jsDelivr), then checks the picker, a desktop choice, a deep link and the phone sheet.
 import { spawn } from "node:child_process";
@@ -46,7 +46,7 @@ ws.onmessage = (m) => {
 };
 await send("Runtime.enable");
 await send("Page.enable");
-await send("Fetch.enable", { patterns: [{ urlPattern: "*cdn.jsdelivr.net/gh/prokhobit/clt-website@*" }] });
+if (!process.argv.includes("--cdn")) await send("Fetch.enable", { patterns: [{ urlPattern: "*cdn.jsdelivr.net/gh/prokhobit/clt-website@*" }] });
 const evaluate = async (expression) => (await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true })).result.value;
 async function shot(name) {
   if (!shotDir) return;

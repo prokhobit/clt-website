@@ -20,11 +20,13 @@ Anything that runs on the site should match a file here.
 | `pages/<page>/<page>.css` | That page's Code Embeds |
 | `pages/<page>/<page>.js` | That page → Before `</body>`, via jsDelivr pinned to the release tag (`.min.js`) |
 | `pages/shared/performances.js` | Site settings → Footer code, via jsDelivr (Home + Events). One CMS item per showtime, merged back into one row per date. Tickets buttons go to `/tickets` only when `window.CLT_TICKETS_URL` is set |
+| `pages/tickets/tickets.{js,css}` | /tickets → page head (CSS) and Before `</body>` (JS), via jsDelivr pinned to the release tag. Markup of its embeds: `pages/tickets/tickets.sections.html` |
 | `pages/about-us/about-team-cms.js` | Inline in About → Before `</body>` |
 
 ## Tests and checks
 
 - `node --test` — unit tests for the pure helpers (`tests/`).
+- `node tools/check-tickets.mjs [--cdn] [--shots <dir>]` — staging /tickets: picker, desktop choice, deep link, phone sheet.
 - `node tools/check-performances.mjs [--tickets] [--cdn] [--shots <dir>]` — loads staging Home and Events in headless Chrome
   with the local `performances.js` / `clt-master.css` swapped in (or as served with `--cdn`) and prints each date row.
 
