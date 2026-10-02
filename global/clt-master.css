@@ -7459,3 +7459,15 @@ a.clt-icon-disc:hover svg,
     visibility: hidden;
   }
 }
+
+/* Performances — a showtime that can't be booked (sold out / cancelled / postponed) */
+.clt-perf-time.is-closed,
+.clt-events-show__time.is-closed {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  opacity: 0.5;
+}
+
+.clt-events-show__time.is-closed::after {
+  content: none;
+}
