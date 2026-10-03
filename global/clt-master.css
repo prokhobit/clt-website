@@ -613,6 +613,21 @@ kbd {
   padding-inline: var(--pad-gutter);
 }
 
+/* At ≤479px the native Webflow style makes .clt-wrap a centred flex column
+   (that keeps its phone section spacing — margins don't collapse). Side
+   effect: children with auto side margins shrink to their content (a 187px
+   section header on a 390px phone) and inline pieces stretch. Children fill
+   the width again, capped by their own max-width; the jump-nav stays its
+   natural size, centred. "html" beats the native rule. */
+@media (max-width: 479px) {
+  html .clt-wrap > :not(a, button, span, img, .clt-button, .clt-jumpnav) {
+    width: 100%;
+  }
+  html .clt-wrap > .clt-jumpnav {
+    align-self: center;
+  }
+}
+
 .clt-wrap--prose {
   max-width: var(--w-prose);
 }
