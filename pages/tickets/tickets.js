@@ -248,6 +248,15 @@
           });
           body.appendChild(times);
           card.appendChild(body);
+          // Clicking the card (not a time) picks its first open time.
+          var firstOpen = dt.shows.filter(bookable)[0];
+          if (firstOpen) {
+            card.classList.add("is-clickable");
+            card.addEventListener("click", function (e) {
+              if (e.target.closest && e.target.closest(".tk-time")) return;
+              choose(firstOpen, true);
+            });
+          }
           list.appendChild(card);
         });
         month.appendChild(list);
@@ -342,6 +351,7 @@
       c.classList.toggle("is-selected", c.getAttribute("data-ymd") === s.ymd);
     });
     if (chosen) chosen.textContent = label(s);
+    switcher(s);
     if (newtab) newtab.href = checkoutUrl(s);
     if (stage) stage.classList.add("is-lit");
     var url = location.pathname + "?date=" + s.ymd + "&time=" + s.tslug + location.hash.replace(/^#(performances|seats)$/, "");
@@ -353,7 +363,7 @@
     if (phone.matches) {
       if (stage) stage.classList.add("is-phone-ready");
       if (mount) mount.textContent = "";
-      if (fromClick && openSheet) openSheet.focus({ preventScroll: true });
+      if (fromClick) openSheetFor(s); // phones: straight into the full-screen checkout
     } else {
       if (stage) stage.classList.remove("is-phone-ready");
       embed(mount, s);
@@ -361,25 +371,59 @@
     }
   }
 
+  // The chosen date's times, in the panel bar, to switch without scrolling back.
+  function switcher(s) {
+    if (!chosen) return;
+    var box = stage && stage.querySelector(".tk-stage__times");
+    if (!box) {
+      box = el("div", "tk-stage__times");
+      box.setAttribute("role", "group");
+      box.setAttribute("aria-label", "Other times on this date");
+      chosen.parentNode.appendChild(box);
+    }
+    box.textContent = "";
+    var same = shows.filter(function (x) { return x.ymd === s.ymd; });
+    if (same.length < 2) return;
+    same.forEach(function (x) {
+      var b = el("button", "tk-time is-small");
+      b.type = "button";
+      b.appendChild(el("span", "tk-time__clock", x.time));
+      if (!bookable(x)) {
+        b.disabled = true;
+        if (x.closed) b.classList.add("is-closed");
+      } else {
+        b.setAttribute("aria-pressed", String(x === s));
+        b.addEventListener("click", function () { if (x !== current) choose(x, true); });
+      }
+      box.appendChild(b);
+    });
+  }
+
+  // Scroll so the checkout panel sits just under the docked nav.
   function scrollToSeats() {
-    var target = document.getElementById("seats");
+    var target = stage || document.getElementById("seats");
     if (!target) return;
     var y = 0;
     for (var n = target; n; n = n.offsetParent) y += n.offsetTop;
-    y = Math.max(0, y - 24);
+    var nav = parseFloat(document.documentElement.style.getPropertyValue("--clt-nav-offset")) || 96;
+    var jump = document.querySelector(".clt-jumpnav"); // docks under the nav once scrolled
+    y = Math.max(0, y - nav - (jump ? jump.offsetHeight + 12 : 0) - 8);
     if (window.CLT && typeof window.CLT.scrollTo === "function") window.CLT.scrollTo(y, reduced ? { immediate: true } : {});
     else window.scrollTo({ top: y, behavior: reduced ? "auto" : "smooth" });
     if (mount) setTimeout(function () { mount.focus({ preventScroll: true }); }, reduced ? 0 : 900);
   }
 
+  function openSheetFor(s) {
+    if (!sheet || !s) return;
+    if (sheetShow) sheetShow.textContent = label(s);
+    embed(sheetMount, s);
+    if (sheet.open) return;
+    if (window.CLT && CLT.dialogs) CLT.dialogs.open(sheet);
+    else if (sheet.showModal) sheet.showModal();
+  }
+
   if (openSheet && sheet) {
-    openSheet.addEventListener("click", function () {
-      if (!current) return;
-      if (sheetShow) sheetShow.textContent = label(current);
-      embed(sheetMount, current);
-      if (window.CLT && CLT.dialogs) CLT.dialogs.open(sheet);
-      else if (sheet.showModal) sheet.showModal();
-    });
+    openSheet.addEventListener("click", function () { openSheetFor(current); });
     sheet.addEventListener("close", function () { if (sheetMount) sheetMount.textContent = ""; });
   }
 

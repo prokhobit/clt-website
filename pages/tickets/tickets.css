@@ -18,6 +18,14 @@
 }
 
 /* ── Step 1 · performances ─────────────────────────────────────────────── */
+.tk-picker,
+.tk-source,
+.tk-venue__grid,
+.tk-faq,
+.clt-panel.is-noir.tk-stage {
+  width: 100%; /* .clt-wrap is a flex container: keep these full width */
+}
+
 .tk-picker {
   display: grid;
   gap: clamp(2rem, 4vw, 3rem);
@@ -113,6 +121,32 @@
 
 .tk-date.is-closed {
   opacity: 0.55;
+}
+
+.tk-date.is-clickable {
+  cursor: pointer;
+}
+
+.tk-date.is-clickable:hover {
+  border-color: color-mix(in srgb, var(--clt-brass-rgb) 40%, transparent);
+}
+
+/* The chosen date's times, inside the stage panel bar */
+.tk-stage__times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.tk-stage__times:empty {
+  display: none;
+}
+
+.tk-time.is-small {
+  min-height: 2.2rem;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.85rem;
 }
 
 .tk-times {
@@ -385,6 +419,7 @@
 }
 
 .tk-stage__foot {
+  max-width: none;
   margin: clamp(1rem, 2vw, 1.4rem) 0 0;
   padding-top: 0.9rem;
   border-top: 1px solid var(--line-soft);
@@ -563,22 +598,58 @@ dialog.clt-dialog.tk-sheet[open] {
   }
 }
 
+/* Phones: everything centred */
 @media (max-width: 47.999rem) {
   .tk-main .clt-page-hero {
     padding-top: 4.5rem;
-    text-align: left;
+    text-align: center;
   }
   .tk-main .clt-page-hero__title,
   .tk-main .clt-page-hero__lede {
-    margin-inline: 0;
+    margin-inline: auto;
+  }
+  .tk-main .clt-page-hero .clt-jumpnav {
+    justify-content: center;
+    margin-inline: auto;
   }
   .tk-main .clt-wrap {
     padding-inline: 1.25rem;
   }
+  .tk-month__label {
+    justify-content: center;
+  }
+  .tk-month__label::before {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(270deg, color-mix(in srgb, var(--clt-brass-rgb) 40%, transparent), transparent);
+  }
   .tk-date {
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 0.85rem;
-    padding: 0.9rem;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 0.7rem;
+    padding: 1.1rem 0.9rem;
+    text-align: center;
+  }
+  .tk-date .tk-date__badge {
+    width: auto;
+    display: inline-flex;
+    gap: 0.4rem;
+    align-items: baseline;
+    padding: 0.4rem 0.8rem;
+  }
+  .tk-times {
+    justify-content: center;
+  }
+  .tk-stage__bar {
+    flex-direction: column;
+    text-align: center;
+  }
+  .tk-stage__times {
+    justify-content: center;
+  }
+  .tk-card {
+    text-align: center;
   }
   .tk-facts li {
     grid-template-columns: minmax(0, 1fr);
