@@ -7328,6 +7328,11 @@ a.clt-icon-disc:hover svg,
   border-color: color-mix(in srgb, var(--clt-brass-rgb) 60%, transparent);
 }
 
+/* Footer legal links wrap instead of overflowing the narrowest phones */
+.clt-footer__legal {
+  flex-wrap: wrap;
+}
+
 .clt-footer__legal button:focus-visible {
   outline: 2px solid var(--clt-brass-200);
   outline-offset: 3px;

@@ -586,6 +586,18 @@ dialog.clt-dialog.tk-sheet[open] {
   }
 }
 
+/* Touch screens: comfortable tap targets */
+@media (pointer: coarse) {
+  .tk-stage__change,
+  .tk-card .clt-button {
+    min-height: 2.75rem;
+  }
+  .tk-stage__foot a {
+    display: inline-block;
+    padding: 0.6rem 0.25rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tk-checkout__loading::before {
     animation: none;
