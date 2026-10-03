@@ -6951,7 +6951,7 @@ a.clt-icon-disc:hover svg,
 
 @media (min-width:992px) {
   .clt-mainnav.is-scrolled .clt-mainnav__bar {
-    background-color: rgba(10,9,11,.5);
+    background-color: rgba(10,9,11,.72);
     box-shadow: inset 0 1px 0 rgba(255,244,218,.18),0 18px 44px rgba(0,0,0,.5);
   }
   .clt-mainnav.is-scrolled .clt-mainnav__seal {
@@ -7082,8 +7082,10 @@ a.clt-icon-disc:hover svg,
 }
 
 @media (prefers-reduced-transparency:reduce) {
-  .clt-mainnav__bar {
+  .clt-mainnav__bar,
+  .clt-mainnav.is-scrolled .clt-mainnav__bar {
     background: #171419;
+    -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
 }
@@ -7134,6 +7136,83 @@ a.clt-icon-disc:hover svg,
 
 .clt-footer__col a:hover {
   color: var(--clt-linen-100);
+}
+
+/* Footer link columns: heading and links share one left edge (centred on
+   phones, like the rest of the footer); links get the inline-link glow —
+   a brass→candle underline that draws in from the left on hover. */
+.clt-footer__nav .clt-footer__col {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.clt-footer__col .clt-footer__link {
+  position: relative;
+  display: inline-block;
+  padding-bottom: 0.3rem;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+  text-decoration: none;
+  transition: color var(--dur-base) var(--ease), text-shadow 520ms var(--ease-stage);
+}
+
+.clt-footer__col .clt-footer__link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--clt-brass-rgb) 85%, transparent) 0%, color-mix(in srgb, var(--clt-candle-rgb) 95%, transparent) 55%, color-mix(in srgb, var(--clt-brass-rgb) 70%, transparent) 100%);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--clt-brass-rgb) 55%, transparent), 0 0 20px color-mix(in srgb, var(--clt-candle-rgb) 26%, transparent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 420ms var(--ease-stage);
+  pointer-events: none;
+}
+
+.clt-footer__col .clt-footer__link:hover,
+.clt-footer__col .clt-footer__link:focus-visible {
+  color: var(--clt-bone);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--clt-candle-rgb) 28%, transparent);
+}
+
+.clt-footer__col .clt-footer__link:hover::after,
+.clt-footer__col .clt-footer__link:focus-visible::after {
+  transform: scaleX(1);
+}
+
+.clt-footer__col .clt-footer__link:focus-visible {
+  outline: 2px solid var(--clt-brass-200);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+
+@media (max-width: 47.99rem) {
+  .clt-footer .clt-footer__nav {
+    width: 100%;
+    grid-template-columns: 1fr 1fr;
+  }
+  .clt-footer__nav .clt-footer__col {
+    align-items: center;
+    text-align: center;
+  }
+  .clt-footer__col .clt-footer__link::after {
+    transform-origin: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clt-footer__col .clt-footer__link::after {
+    transform: scaleX(1);
+    opacity: 0;
+    transition: opacity var(--dur-base) var(--ease);
+  }
+  .clt-footer__col .clt-footer__link:hover::after,
+  .clt-footer__col .clt-footer__link:focus-visible::after {
+    opacity: 1;
+  }
 }
 
 .clt-footer__legal button {

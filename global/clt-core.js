@@ -2107,6 +2107,186 @@
     };
   }
 
+  // ── hero stage · the page hero focuses in out of a blur, and blurs away ────
+  // Every page but Home (and Schools, which stages its own video hero): the
+  // first .clt-page-hero plays the Schools entrance once the curtain opens —
+  // eyebrow letters, then title words, rise out of a blur; lede, buttons and
+  // jump-nav follow — and a large hero picture ([data-clt-hero-media], or the
+  // About / YAP media) settles in from a soft zoom. Scrolling the hero away
+  // blurs and fades each part as it leaves the top of the screen (scrubbed,
+  // so scrolling back focuses it again). Touch screens get the same motion
+  // without blur filters. data-clt-hero-stage="off" on the hero opts out.
+  // The reveal and split systems leave everything inside a staged hero alone.
+  var HERO_MEDIA = "[data-clt-hero-media], [data-au-hero-media], [data-yap-hero-media]";
+
+  function notStaged(el) {
+    return !el.closest("[data-clt-hero-stage]");
+  }
+
+  function initHeroStage() {
+    if (location.pathname === "/" || $("[data-pfs-hero]")) return;
+    var hero = $(".clt-page-hero");
+    if (!hero || hero.getAttribute("data-clt-hero-stage") === "off") return;
+    hero.setAttribute("data-clt-hero-stage", "");
+    var gsap = window.gsap,
+      ST = window.ScrollTrigger;
+    if (env.reducedMotion || !gsap) return; // reveal/split skip it → plain static hero
+
+    var eyebrow = $(".clt-eyebrow", hero);
+    var title = $(".clt-page-hero__title", hero);
+    var lede = $(".clt-page-hero__lede", hero);
+    var actionsBox = $(".clt-showcase__actions", hero);
+    var actions = actionsBox ? $all(":scope > *", actionsBox) : [];
+    var jump = $(".clt-jumpnav", hero);
+    var media = $(HERO_MEDIA, hero);
+    var soft = !env.isTouch; // 40-odd blurred layers at once is too much for a phone
+    var blur = function (px) {
+      return soft ? "blur(" + px + "px)" : "none";
+    };
+    var focus = "clt-stage",
+      settle = "clt-stage";
+    var CE = window.CustomEase;
+    if (CE) {
+      registerGsapPlugin(CE);
+      CE.create("clt-focus", "M0,0 C0.12,0.62 0.2,0.92 0.42,0.98 0.62,1.01 0.8,1 1,1");
+      CE.create("clt-settle", "M0,0 C0.18,0.72 0.3,0.96 0.52,0.99 0.72,1.01 0.86,1 1,1");
+      focus = "clt-focus";
+      settle = "clt-settle";
+    }
+
+    // Eyebrow text sits in a child span (Events) or loose beside the bar (About).
+    var eyebrowText = [];
+    if (eyebrow) {
+      Array.prototype.slice.call(eyebrow.childNodes).forEach(function (n) {
+        if (n.nodeType === 3 && n.textContent.trim()) {
+          var s = document.createElement("span");
+          eyebrow.insertBefore(s, n);
+          s.appendChild(n);
+          eyebrowText.push(s);
+        } else if (n.nodeType === 1 && !n.classList.contains("clt-eyebrow__bar") && n.textContent.trim()) {
+          eyebrowText.push(n);
+        }
+      });
+    }
+
+    var copy = [eyebrow, title, lede, actionsBox].filter(Boolean);
+    var hidden = copy.concat(jump ? [jump] : []);
+    gsap.set(hidden, { autoAlpha: 0 });
+    var mediaNow = media && media.getBoundingClientRect().top < window.innerHeight;
+    if (media) gsap.set(media, { autoAlpha: 0, scale: 1.06, filter: blur(16), transformOrigin: "50% 40%" });
+
+    // Each part blurs away as it leaves the top of the screen. Built once its
+    // entrance is done, so the scrubbed tween never fights the entrance.
+    function leave(el, px, floor, start) {
+      if (!ST || !el) return;
+      gsap.fromTo(
+        el,
+        { autoAlpha: 1, filter: blur(0), y: 0 },
+        {
+          autoAlpha: floor,
+          filter: blur(px),
+          y: -28,
+          ease: "none",
+          immediateRender: false,
+          scrollTrigger: {
+            trigger: el,
+            start: start || "top 14%",
+            end: "bottom top",
+            scrub: 0.6,
+            invalidateOnRefresh: true,
+          },
+        },
+      );
+    }
+
+    function mediaIn(delay) {
+      gsap.to(media, {
+        autoAlpha: 1,
+        scale: 1,
+        filter: blur(0),
+        duration: 1.9,
+        delay: delay || 0,
+        ease: settle,
+        onComplete: function () {
+          gsap.set(media, { clearProps: "filter,transform,willChange" });
+          leave(media, 14, 0.2, "top 10%");
+        },
+      });
+    }
+
+    function play() {
+      var Split = window.SplitText;
+      var words = title ? [title] : [],
+        chars = eyebrowText;
+      if (Split) {
+        registerGsapPlugin(Split);
+        if (title) {
+          words = Split.create(title, { type: "words", wordsClass: "clt-hero-word" }).words;
+          $all(".clt-text-foil .clt-hero-word", title).forEach(function (w) {
+            w.classList.add("clt-text-foil");
+          });
+        }
+        chars = [];
+        eyebrowText.forEach(function (t) {
+          chars = chars.concat(Split.create(t, { type: "chars", charsClass: "clt-hero-char" }).chars);
+        });
+      }
+      var rise = { autoAlpha: 0, filter: blur(14), yPercent: 22 };
+      var tl = gsap.timeline({
+        defaults: { ease: focus },
+        onComplete: function () {
+          gsap.set(words.concat(chars, lede ? [lede] : []), { clearProps: "filter,willChange" });
+          if (jump) gsap.set(jump, { clearProps: "opacity,visibility,transform" });
+          [eyebrow, title, lede, actionsBox].forEach(function (el) {
+            leave(el, el === title ? 12 : 10, 0);
+          });
+          if (typeof CLT.refresh === "function") CLT.refresh();
+        },
+      });
+      tl.set([eyebrow, title].filter(Boolean), { autoAlpha: 1 }, 0);
+      if (chars.length)
+        tl.fromTo(chars, rise, { autoAlpha: 1, filter: blur(0), yPercent: 0, duration: 0.9, stagger: 0.022 }, 0);
+      if (words.length)
+        tl.fromTo(words, rise, { autoAlpha: 1, filter: blur(0), yPercent: 0, duration: 1.25, stagger: 0.07 }, 0.2);
+      if (lede)
+        tl.fromTo(lede, { autoAlpha: 0, filter: blur(10), y: 14 }, { autoAlpha: 1, filter: blur(0), y: 0, duration: 1.1 }, 0.65);
+      if (actionsBox) {
+        tl.set(actionsBox, { autoAlpha: 1 }, 0.85);
+        tl.fromTo(actions, { autoAlpha: 0, y: 16 }, { autoAlpha: 1, y: 0, duration: 0.8, stagger: 0.08, clearProps: "transform,opacity,visibility" }, 0.85);
+      }
+      if (jump) tl.to(jump, { autoAlpha: 1, duration: 0.9, ease: "power2.out" }, 1);
+      if (media) {
+        if (mediaNow) mediaIn(0.35);
+        else if (ST)
+          ST.create({ trigger: media, start: "top 92%", once: true, onEnter: function () { mediaIn(0); } });
+        else mediaIn(0);
+      }
+    }
+
+    // Let the curtain open first; wait (briefly) for the fonts so words split
+    // where they will finally wrap.
+    var delay = $(".clt-curtain-stage") ? 550 : 120;
+    var fonts = document.fonts && document.fonts.ready ? document.fonts.ready : null;
+    var go = (function () {
+      var done = false;
+      return function () {
+        if (done) return;
+        done = true;
+        try {
+          play();
+        } catch (e) {
+          gsap.set(hidden.concat(media ? [media] : []), { clearProps: "opacity,visibility,filter,transform" });
+          console.warn("[CLT] hero stage failed", e);
+        }
+      };
+    })();
+    setTimeout(function () {
+      if (fonts) fonts.then(go, go);
+      setTimeout(go, 900);
+      if (!fonts) go();
+    }, delay);
+  }
+
   // ── reveal-on-scroll · "stage assembly" (GSAP-driven, opt-in) ──────────────
   function revealVariant(el) {
     var raw = el.getAttribute("data-clt-reveal");
@@ -2142,7 +2322,7 @@
 
     var els = $all(
       '[data-clt-reveal], [data-reveal], [data-gsap~="clt-reveal"], [data-gsap~="clt-rise"]',
-    );
+    ).filter(notStaged);
 
     if (els.length) {
       if (env.reducedMotion || !gsap || !ST) {
@@ -2229,7 +2409,7 @@
   }
 
   function initSplit(gsap, ST, start, stagger, duration, ease, strike, replay) {
-    var els = $all("[data-clt-split]");
+    var els = $all("[data-clt-split]").filter(notStaged);
     if (!els.length) return;
     var Split = window.SplitText;
 
@@ -2828,6 +3008,7 @@
     initMagnetic();
     initTilt();
     initScramble();
+    initHeroStage();
     initReveal();
     initLamp();
     initHouseLights();

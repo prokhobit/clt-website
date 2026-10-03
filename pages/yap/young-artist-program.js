@@ -1,11 +1,10 @@
-/* CLT · Young Artist Program — hero overlay, interview player, student video lightbox. */
+/* CLT · Young Artist Program — interview player, student video lightbox. (The hero is staged by clt-core.) */
 (function () {
   "use strict";
 
   if (window.__cltYapReady) return;
   window.__cltYapReady = true;
 
-  var HERO_LEAD = 64; // px scrolled before the hero copy starts to hold
   var EMBED = "https://www.youtube-nocookie.com/embed/";
 
   var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -112,48 +111,6 @@
     });
   }
 
-  // Hero: the copy holds while the photo rises under it (wide screens); the photo grows in elsewhere.
-  function initHeroOverlay() {
-    var gsap = window.gsap, ST = window.ScrollTrigger;
-    var copy = document.querySelector("[data-yap-hero-copy]");
-    var media = document.querySelector("[data-yap-hero-media]");
-    if (!copy || !media || !gsap || !ST || !gsap.matchMedia || reduced) return;
-    gsap.registerPlugin(ST);
-    var hero = copy.parentNode;
-
-    function travel() {
-      var copyMid = copy.offsetTop + copy.offsetHeight / 2;
-      var mediaMid = media.offsetTop + media.offsetHeight / 2;
-      return Math.max(0, mediaMid - copyMid);
-    }
-
-    var mm = gsap.matchMedia();
-    mm.add("(min-width: 64rem)", function () {
-      gsap.timeline({
-        defaults: { ease: "none" },
-        scrollTrigger: {
-          trigger: hero,
-          start: "top+=" + HERO_LEAD + " top",
-          end: function () { return "+=" + travel(); },
-          scrub: true,
-          invalidateOnRefresh: true,
-        },
-      })
-        .fromTo(copy, { y: 0 }, { y: function () { return travel(); }, duration: 1 }, 0)
-        .fromTo(media, { scale: 0.92 }, { scale: 1, duration: 1, ease: "power1.out" }, 0)
-        .fromTo(media, { "--yap-scrim": 0 }, { "--yap-scrim": 1, duration: 0.45, ease: "power1.out" }, 0.1);
-      return function () { gsap.set([copy, media], { clearProps: "transform,--yap-scrim" }); };
-    });
-    mm.add("(max-width: 63.99rem)", function () {
-      gsap.fromTo(media, { scale: 0.94 }, {
-        scale: 1,
-        ease: "none",
-        scrollTrigger: { trigger: media, start: "top bottom", end: "top 40%", scrub: true },
-      });
-      return function () { gsap.set(media, { clearProps: "transform" }); };
-    });
-  }
-
   // Interview: the iframe replaces the facade in place.
   function initInline(page) {
     all(".yap-video[data-yap-inline]", page).forEach(function (btn) {
@@ -240,7 +197,6 @@
     var page = document.querySelector(".yap-page");
     if (!page) return;
     [
-      ["hero overlay", initHeroOverlay],
       ["interview", initInline],
       ["lightbox", initLightbox],
     ].forEach(function (part) {

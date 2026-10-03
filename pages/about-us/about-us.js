@@ -1,8 +1,8 @@
 /* ════════════════════════════════════════════════════════════════════════════
    CLT · ABOUT US — page script
    ────────────────────────────────────────────────────────────────────────────
-   Owns two things: the "Our Team" roster (.au-member), and the hero overlay
-   (initHeroOverlay, near the end — the copy comes to rest over the media).
+   Owns the "Our Team" roster (.au-member). The hero is staged by clt-core
+   (initHeroStage — blur-focus entrance, blur-out on leave).
 
    HOW THE EXPANSION WORKS
      The roster is a twelve-column grid. Opening a card gives it .is-active —
@@ -645,71 +645,6 @@
     };
   }
 
-  /* ══ HERO · the copy comes to rest over the media ══════════════════════════
-     After a short lead-in scroll the hero copy (eyebrow → jump-nav, in
-     [data-au-hero-copy]) holds its place on screen while the media
-     ([data-au-hero-media]) keeps scrolling up beneath it, growing from 92% to
-     full size and gathering a dark scrim, until the two centres meet. From
-     there they scroll on together as one block.
-
-     "Holding its place" is a y-translate equal to the distance scrolled —
-     scrub: true, no pin — so there is no pin-spacer, no layout shift and no
-     jump when it ends: the copy simply keeps its final offset. clt-core's
-     Lenis already smooths the scroll, so any extra scrub lag would only make
-     the copy drift. Distances are read from offsetTop/offsetHeight, which
-     ignore transforms, and re-read on every ScrollTrigger refresh.
-
-     Wide screens only: on a phone the 16:9 media is far shorter than the
-     copy, so the copy would bury it. There the media just grows in as it
-     arrives. Reduced motion or no GSAP → the static stacked hero. */
-  var HERO_LEAD = 64; // px scrolled before the copy starts to hold
-
-  function initHeroOverlay() {
-    var gsap = window.gsap;
-    var ST = window.ScrollTrigger;
-    var copy = document.querySelector("[data-au-hero-copy]");
-    var media = document.querySelector("[data-au-hero-media]");
-    if (!copy || !media || !gsap || !ST || !gsap.matchMedia) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    gsap.registerPlugin(ST);
-    var hero = copy.parentNode;
-
-    // How far the copy has to hold for its centre to land on the media's.
-    function travel() {
-      var copyMid = copy.offsetTop + copy.offsetHeight / 2;
-      var mediaMid = media.offsetTop + media.offsetHeight / 2;
-      return Math.max(0, mediaMid - copyMid);
-    }
-
-    var mm = gsap.matchMedia();
-
-    mm.add("(min-width: 48rem)", function () {
-      var tl = gsap.timeline({
-        defaults: { ease: "none" },
-        scrollTrigger: {
-          trigger: hero,
-          start: "top+=" + HERO_LEAD + " top",
-          end: function () { return "+=" + travel(); },
-          scrub: true,
-          invalidateOnRefresh: true,
-        },
-      });
-      tl.fromTo(copy, { y: 0 }, { y: function () { return travel(); }, duration: 1 }, 0)
-        .fromTo(media, { scale: 0.92 }, { scale: 1, duration: 1, ease: "power1.out" }, 0)
-        .fromTo(media, { "--au-scrim": 0 }, { "--au-scrim": 1, duration: 0.55, ease: "power1.in" }, 0.45);
-      return function () { gsap.set([copy, media], { clearProps: "transform,--au-scrim" }); };
-    });
-
-    mm.add("(max-width: 47.99rem)", function () {
-      gsap.fromTo(media, { scale: 0.94 }, {
-        scale: 1,
-        ease: "none",
-        scrollTrigger: { trigger: media, start: "top bottom", end: "top 40%", scrub: true },
-      });
-      return function () { gsap.set(media, { clearProps: "transform" }); };
-    });
-  }
-
   function init() {
     try {
       var apis = all(ROSTER).map(initRoster).filter(Boolean);
@@ -718,11 +653,6 @@
       /* clt-core swallows anything thrown from its ready queue, so surface
          our own failures rather than dying silently. */
       console.warn("[CLT about-us] roster init failed", e);
-    }
-    try {
-      initHeroOverlay();
-    } catch (e) {
-      console.warn("[CLT about-us] hero overlay init failed", e);
     }
   }
 
