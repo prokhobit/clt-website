@@ -2301,7 +2301,11 @@
         }
         chars = [];
         eyebrowText.forEach(function (t) {
-          chars = chars.concat(Split.create(t, { type: "chars", charsClass: "clt-hero-char" }).chars);
+          // Words wrap as units (inline-block, no break inside) so a narrow
+          // screen never splits "SEASON" into "SEASO / N".
+          chars = chars.concat(
+            Split.create(t, { type: "words,chars", wordsClass: "clt-hero-eyebrow-word", charsClass: "clt-hero-char" }).chars,
+          );
         });
       }
       var rise = { autoAlpha: 0, filter: blur(14), yPercent: 22 };

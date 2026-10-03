@@ -806,6 +806,11 @@ kbd {
   z-index: -1;
 }
 
+/* Hero stage: eyebrow letters animate one by one, words stay whole. */
+.clt-hero-eyebrow-word {
+  white-space: nowrap;
+}
+
 /* Hero with a picture stage (About, YAP; any [data-clt-hero-media] placed
    directly in .clt-page-hero): the copy overlays the framed photo like the
    Schools video hero — scrim for legibility, a candle spot from above.
