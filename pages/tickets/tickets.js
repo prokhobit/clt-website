@@ -169,6 +169,7 @@
 
   var touch = null;
   try { touch = JSON.parse(sessionStorage.getItem("clt-first-touch") || "null"); } catch (e) {}
+  if (!touch) touch = window.CLT_TOUCH || null; // no consent to keep it: this page view only
   var REF = refFromTouch(touch);
 
   var current = null;

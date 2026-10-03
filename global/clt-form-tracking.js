@@ -1,10 +1,19 @@
-/* CLT · form source tracking — site footer (inline). Adds hidden fields to every
+/* CLT · form source tracking — site footer. Adds hidden fields to every
    Webflow form so each submission records where the person came from:
-   Source page, First referrer, First landing page, UTM (first touch, kept for
-   the browser session). Works with Webflow Forms and any CRM synced from them. */
+   Source page, First referrer, First landing page, UTM. The first touch is kept
+   for the browser session only when the visitor allows "Visit measurement"
+   (clt-tracking consent); otherwise it covers the current page view only.
+   Exposes window.CLT_TOUCH for the tickets page. */
 (function () {
   "use strict";
   var KEY = "clt-first-touch";
+  function measureAllowed() {
+    if (navigator.globalPrivacyControl === true) return false;
+    try {
+      var c = JSON.parse(localStorage.getItem("clt-consent") || "null");
+      return !!(c && c.v === 1 && c.measure && Date.now() - c.at < 365 * 864e5);
+    } catch (e) { return false; }
+  }
   var touch = null;
   try { touch = JSON.parse(sessionStorage.getItem(KEY) || "null"); } catch (e) {}
   if (!touch) {
@@ -14,8 +23,16 @@
       .filter(Boolean).join(", ");
     var ref = document.referrer && document.referrer.indexOf(location.host) === -1 ? document.referrer : "";
     touch = { ref: ref || "(direct)", landing: location.pathname, utm: utm || "(none)" };
-    try { sessionStorage.setItem(KEY, JSON.stringify(touch)); } catch (e) {}
   }
+  window.CLT_TOUCH = touch;
+  function persist() {
+    try {
+      if (measureAllowed()) sessionStorage.setItem(KEY, JSON.stringify(touch));
+      else sessionStorage.removeItem(KEY);
+    } catch (e) {}
+  }
+  persist();
+  document.addEventListener("clt:consent", persist);
   function add(form, name, value) {
     var input = form.querySelector('input[type="hidden"][name="' + name + '"]');
     if (!input) {
