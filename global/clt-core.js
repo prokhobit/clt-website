@@ -1367,6 +1367,49 @@
     });
   }
 
+  // ── In-page links (#id) — one scroll, through Lenis ──────────────────────
+  // Webflow's own smooth scroll (jQuery, on document) also takes same-page
+  // hash links and parks the section at the very top of the screen — under
+  // the nav bar and the docked jump-nav. Lenis's anchor handler (on window)
+  // ran too and lost. This listener sits on <body>: after the link's own
+  // listeners (the jump-nav spy) and before both of those. It scrolls once:
+  // Lenis subtracts the html scroll-padding (the nav, set by the Main Nav)
+  // and the target's scroll-margin (the docked jump-nav row, setClearance).
+  function initAnchors() {
+    var body = document.body;
+    if (!body || body.__cltAnchors) return;
+    body.__cltAnchors = true;
+    body.addEventListener("click", function (e) {
+      if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      var a = e.target.closest ? e.target.closest("a[href]") : null;
+      if (!a || a.hasAttribute("data-open-dialog") || a.hasAttribute("data-clt-anchor-native")) return;
+      if (a.closest(".w-tab-menu, .w-dropdown, .w-lightbox, [role='tab']")) return;
+      var hash = "";
+      var href = a.getAttribute("href") || "";
+      if (href.charAt(0) === "#") hash = href;
+      else {
+        try {
+          var u = new URL(a.href);
+          if (u.origin !== location.origin || u.pathname !== location.pathname || u.search !== location.search) return;
+          hash = u.hash;
+        } catch (err) {
+          return;
+        }
+      }
+      if (hash.length < 2) return;
+      var target = null;
+      try { target = document.getElementById(decodeURIComponent(hash.slice(1))); } catch (err) {}
+      if (!target) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (CLT.lenis && typeof CLT.lenis.scrollTo === "function") CLT.lenis.scrollTo(target, env.reducedMotion ? { immediate: true } : {});
+      else target.scrollIntoView({ behavior: env.reducedMotion ? "auto" : "smooth", block: "start" });
+      if (location.hash !== hash) {
+        try { history.pushState(null, "", hash); } catch (err) {}
+      }
+    });
+  }
+
   function initSectionNav(root) {
     $all("[data-clt-sectionnav]", root || document).forEach(function (nav) {
       var links = $all(".clt-sectionnav__link", nav);
@@ -1623,16 +1666,19 @@
 
       // Jump targets clear the docked nav as well as the Glass Nav: the
       // html scroll-padding covers the Glass Nav, scroll-margin (honoured by
-      // native anchors and Lenis alike) adds the docked row plus a 12px gap.
+      // native anchors and Lenis alike) adds the docked row plus an 8px gap.
       // Measured as one row of links — the docked form — even while the nav
       // is still wrapped over two rows in the hero.
       function setClearance() {
         if (!canDock) return;
         var cs = getComputedStyle(nav);
-        var row = items[0].link.offsetHeight +
+        // The docked height when the stylesheet sets one (clt-master.css,
+        // --clt-jumpnav-docked-h), else one row measured as drawn.
+        var dockedH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--clt-jumpnav-docked-h"));
+        var row = dockedH > 0 ? dockedH : items[0].link.offsetHeight +
           parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) +
           parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
-        items.forEach(function (it) { it.target.style.scrollMarginTop = Math.ceil(row + 12) + "px"; });
+        items.forEach(function (it) { it.target.style.scrollMarginTop = Math.ceil(row + 8) + "px"; });
       }
 
       // Click lock — released 160ms after the last scroll event of the jump.
@@ -3079,6 +3125,7 @@
     initCardFlip();
     initSectionNav();
     initJumpNav();
+    initAnchors();
     initButtonClef();
     initNavbarCondense();
     initAmbient();

@@ -7801,3 +7801,40 @@ html .clt-jumpnav.is-docked {
     transform: none;
   }
 }
+
+/* Navs take less room on desktop (2026-10-03): bar 10px from the top and 6px
+   inner padding (logo unchanged); docked jump-nav 44px tall, 8px under the bar's
+   clearance; jump targets land 8px under it (clt-core setClearance reads
+   --clt-jumpnav-docked-h). "html" beats the same-specificity rules in the
+   design-system embed that loads after this sheet. */
+@media (min-width: 992px) {
+  html .clt-mainnav {
+    top: 10px;
+  }
+  html .clt-mainnav__bar {
+    min-height: 64px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+}
+
+@media (min-width: 62rem) {
+  :root {
+    --clt-jumpnav-docked-h: 44px;
+  }
+  html .clt-jumpnav.is-docked {
+    padding-top: 4px;
+    padding-bottom: 4px;
+  }
+  html .clt-jumpnav.is-docked .clt-jumpnav__link {
+    height: 34px;
+    min-height: 34px;
+  }
+}
+
+/* Phones: no section jump-nav in page heroes (the page reads straight down) */
+@media (max-width: 47.999rem) {
+  html .clt-page-hero .clt-jumpnav {
+    display: none;
+  }
+}
