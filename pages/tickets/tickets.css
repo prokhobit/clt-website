@@ -598,6 +598,153 @@ dialog.clt-dialog.tk-sheet[open] {
   }
 }
 
+/* Intro line (phones) and the venue link under the dates */
+.tk-intro {
+  display: none;
+  margin: 0;
+  text-align: center;
+}
+
+.tk-intro__show {
+  display: block;
+  color: var(--clt-linen-100);
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+}
+
+.tk-intro__venue {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.tk-venue-link {
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.6rem 0.25rem;
+  color: var(--clt-brass-100);
+  font-size: 0.9rem;
+  text-decoration: none;
+  transition: color 380ms var(--ease);
+}
+
+.tk-venue-link::after {
+  content: "↓";
+  transition: transform 420ms var(--ease-stage);
+}
+
+.tk-venue-link:hover {
+  color: var(--clt-linen-100);
+}
+
+.tk-venue-link:hover::after {
+  transform: translateY(3px);
+}
+
+.tk-date.is-flash {
+  animation: tk-flash 2.4s var(--ease) 1;
+}
+
+@keyframes tk-flash {
+  0%, 100% { box-shadow: var(--carve-rest), var(--carve-ring); }
+  25%, 60% { box-shadow: var(--carve-rest), var(--carve-ring), 0 0 0 2px var(--clt-brass-200), 0 0 36px color-mix(in srgb, var(--clt-candle-rgb) 30%, transparent); }
+}
+
+/* FAQ stashed for now (markup stays in the venue embed) */
+.tk-faq-section {
+  display: none;
+}
+
+/* Full-screen checkout: the date's times, "Change date", price key */
+.tk-sheet__meta {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.7rem 1rem 0.75rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.tk-sheet__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.tk-sheet__row .tk-stage__times {
+  margin: 0;
+}
+
+.tk-sheet__change {
+  appearance: none;
+  padding: 0.5rem 0.25rem;
+  border: 0;
+  background: none;
+  color: var(--clt-brass-100);
+  font: 600 0.85rem/1 var(--font-body);
+  cursor: pointer;
+  transition: color 380ms var(--ease);
+}
+
+.tk-sheet__change:hover {
+  color: var(--clt-linen-100);
+}
+
+.tk-sheet__prices {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+
+/* Phones: back into the checkout after closing it */
+.tk-resume {
+  position: fixed;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  z-index: calc(var(--z-nav) + 1);
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.6rem 0.6rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--clt-brass-rgb) 32%, transparent);
+  border-radius: var(--r-pill);
+  background: var(--clt-pitch);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.55);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(0.5rem);
+  transition: opacity 420ms var(--ease), transform 540ms var(--ease-stage), visibility 0s linear 540ms;
+}
+
+.tk-resume.is-open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
+  transition-delay: 0s;
+}
+
+.tk-resume__show {
+  margin: 0;
+  min-width: 0;
+  color: var(--clt-linen-100);
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tk-resume .clt-button {
+  flex: none;
+}
+
 /* Phones: everything centred */
 @media (max-width: 47.999rem) {
   .tk-main .clt-page-hero {
@@ -608,9 +755,34 @@ dialog.clt-dialog.tk-sheet[open] {
   .tk-main .clt-page-hero__lede {
     margin-inline: auto;
   }
-  .tk-main .clt-page-hero .clt-jumpnav {
-    justify-content: center;
-    margin-inline: auto;
+  /* Compact hero: eyebrow + title, then straight into the dates */
+  .tk-main .clt-page-hero {
+    padding-top: 3.25rem;
+    padding-bottom: 0.5rem;
+  }
+  .tk-main .clt-page-hero .clt-jumpnav,
+  .tk-main .clt-page-hero__lede {
+    display: none;
+  }
+  [data-tk-pick] {
+    padding-top: 1.25rem;
+  }
+  [data-tk-pick] .clt-section-header {
+    display: none;
+  }
+  .tk-picker {
+    margin-top: 0;
+    gap: 1.6rem;
+  }
+  .tk-intro {
+    display: block;
+  }
+  /* The checkout opens full screen on phones; no stage panel */
+  .tk-seats {
+    display: none;
+  }
+  .tk-resume {
+    display: flex;
   }
   .tk-main .clt-wrap {
     padding-inline: 1.25rem;

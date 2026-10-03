@@ -144,6 +144,9 @@
   var sheetShow = document.querySelector("[data-tk-sheet-show]");
   var phone = window.matchMedia("(max-width: 47.999rem)");
   var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var navTicket = document.querySelector(".clt-mainnav__ticket");
+  // The phone sheet must not sit inside #seats, which phones hide.
+  if (sheet && sheet.parentNode !== document.body) document.body.appendChild(sheet);
 
   function text(el, sel) {
     var n = el.querySelector(sel);
@@ -195,6 +198,11 @@
       return;
     }
     var next = shows.filter(bookable)[0];
+    var venue = document.querySelector(".tk-card__title");
+    var intro = el("p", "tk-intro");
+    intro.appendChild(el("span", "tk-intro__show", groups[0].production));
+    if (venue) intro.appendChild(el("span", "tk-intro__venue", venue.textContent.trim()));
+    picker.appendChild(intro);
     groups.forEach(function (g) {
       var wrap = el("div", "tk-production");
       if (groups.length > 1) wrap.appendChild(el("h3", "tk-production__title", g.production));
@@ -264,6 +272,31 @@
       });
       picker.appendChild(wrap);
     });
+    if (document.getElementById("venue")) {
+      var more = el("a", "tk-venue-link", "Seating plan & venue");
+      more.href = "#venue";
+      picker.appendChild(more);
+    }
+  }
+
+  // Picker parts rise in as the hero settles, then the rest as they scroll in.
+  function entrance() {
+    var gsap = window.gsap, ST = window.ScrollTrigger;
+    if (reduced || !gsap || !ST) return;
+    var items = Array.prototype.slice.call(picker.querySelectorAll(".tk-intro, .tk-month__label, .tk-date, .tk-venue-link"));
+    if (!items.length) return;
+    gsap.set(items, { autoAlpha: 0, y: 24 });
+    var first = true;
+    var ease = (window.CLT && CLT.motion && CLT.motion.easeStage) || "power3.out";
+    ST.batch(items, {
+      start: "top 96%",
+      once: true,
+      onEnter: function (batch) {
+        gsap.to(batch, { autoAlpha: 1, y: 0, duration: 0.8, stagger: 0.08, ease: ease,
+          delay: first ? 0.95 : 0, clearProps: "transform,opacity,visibility" });
+        first = false;
+      }
+    });
   }
 
   // ── Checkout ───────────────────────────────────────────────────────────────
@@ -274,6 +307,9 @@
 
   function label(s) {
     return DAYS_LONG[s.wd] + ", " + MONTHS[s.m] + " " + s.d + " · " + s.time;
+  }
+  function shortLabel(s) {
+    return DAYS[s.wd] + ", " + MONTHS[s.m].slice(0, 3) + " " + s.d + " · " + s.time;
   }
 
   // Inline Ticket Tailor widget; falls back to a link if it hasn't drawn after ~8 s.
@@ -354,6 +390,7 @@
     switcher(s);
     if (newtab) newtab.href = checkoutUrl(s);
     if (stage) stage.classList.add("is-lit");
+    if (navTicket) navTicket.textContent = "Seats";
     var url = location.pathname + "?date=" + s.ymd + "&time=" + s.tslug + location.hash.replace(/^#(performances|seats)$/, "");
     try { history.replaceState(null, "", url); } catch (e) {}
     if (window.CLT && typeof window.CLT.track === "function") {
@@ -364,6 +401,7 @@
       if (stage) stage.classList.add("is-phone-ready");
       if (mount) mount.textContent = "";
       if (fromClick) openSheetFor(s); // phones: straight into the full-screen checkout
+      else updateResume();
     } else {
       if (stage) stage.classList.remove("is-phone-ready");
       embed(mount, s);
@@ -413,18 +451,122 @@
     if (mount) setTimeout(function () { mount.focus({ preventScroll: true }); }, reduced ? 0 : 900);
   }
 
+  // ── Phones: sheet header extras, resume bar, nav Tickets button ─────────────
+  var sheetMeta = null;
+  var resume = null;
+
+  // "Premium $65 · Standard $55 · Value $45" from the venue facts (one place to edit).
+  function priceKey() {
+    var facts = document.querySelector(".tk-facts");
+    var m = facts ? facts.textContent.match(/(Premium|Standard|Value|[A-Z][a-z]+)\s+\$\d+/g) : null;
+    return m ? m.join(" · ") : "";
+  }
+
+  function sheetExtras(s) {
+    if (!sheet) return;
+    if (!sheetMeta) {
+      sheetMeta = el("div", "tk-sheet__meta");
+      var bar = sheet.querySelector(".tk-sheet__bar");
+      if (bar && bar.nextSibling) sheet.insertBefore(sheetMeta, bar.nextSibling);
+      else sheet.appendChild(sheetMeta);
+    }
+    sheetMeta.textContent = "";
+    var same = shows.filter(function (x) { return x.ymd === s.ymd; });
+    var row = el("div", "tk-sheet__row");
+    if (same.length > 1) {
+      var times = el("div", "tk-stage__times");
+      times.setAttribute("role", "group");
+      times.setAttribute("aria-label", "Times on this date");
+      same.forEach(function (x) {
+        var b = el("button", "tk-time is-small");
+        b.type = "button";
+        b.appendChild(el("span", "tk-time__clock", x.time));
+        if (!bookable(x)) { b.disabled = true; if (x.closed) b.classList.add("is-closed"); }
+        else {
+          b.setAttribute("aria-pressed", String(x === s));
+          b.addEventListener("click", function () { if (x !== current) choose(x, true); });
+        }
+        times.appendChild(b);
+      });
+      row.appendChild(times);
+    }
+    var change = el("button", "tk-sheet__change", "Change date");
+    change.type = "button";
+    change.addEventListener("click", function () {
+      closeSheet();
+      setTimeout(function () { scrollToEl(section); }, 350);
+    });
+    row.appendChild(change);
+    sheetMeta.appendChild(row);
+    var prices = priceKey();
+    if (prices) sheetMeta.appendChild(el("p", "tk-sheet__prices", prices));
+  }
+
+  function closeSheet() {
+    if (!sheet || !sheet.open) return;
+    if (window.CLT && CLT.dialogs) CLT.dialogs.close(sheet);
+    else if (sheet.close) sheet.close();
+  }
+
+  // Slim bar above the phone menu: back into the checkout with one tap.
+  function updateResume() {
+    var show = !!(current && phone.matches && !(sheet && sheet.open));
+    if (!resume && show) {
+      resume = el("div", "tk-resume");
+      resume.setAttribute("role", "region");
+      resume.setAttribute("aria-label", "Your performance");
+      resume.appendChild(el("p", "tk-resume__show"));
+      var go = el("button", "clt-button is-primary is-small");
+      go.type = "button";
+      go.appendChild(el("span", "clt-button__text", "Continue to seats"));
+      go.addEventListener("click", function () { openSheetFor(current); });
+      resume.appendChild(go);
+      document.body.appendChild(resume);
+    }
+    if (!resume) return;
+    if (current) resume.querySelector(".tk-resume__show").textContent = shortLabel(current);
+    var banner = document.querySelector(".clt-consent.is-open");
+    resume.style.bottom = banner ? Math.round(window.innerHeight - banner.getBoundingClientRect().top + 8) + "px" : "";
+    resume.classList.toggle("is-open", show);
+  }
+  document.addEventListener("clt:consent", function () { setTimeout(updateResume, 520); });
+  window.addEventListener("resize", updateResume);
+
+  // On this page the nav's Tickets button leads into the chosen performance.
+  if (navTicket) {
+    navTicket.addEventListener("click", function (e) {
+      if (e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      if (current && phone.matches) openSheetFor(current);
+      else if (current) scrollToSeats();
+      else scrollToEl(section);
+    });
+  }
+
+  function scrollToEl(target) {
+    var y = 0;
+    for (var n = target; n; n = n.offsetParent) y += n.offsetTop;
+    var nav = parseFloat(document.documentElement.style.getPropertyValue("--clt-nav-offset")) || 24;
+    y = Math.max(0, y - (phone.matches ? 16 : nav + 16));
+    if (window.CLT && typeof window.CLT.scrollTo === "function") window.CLT.scrollTo(y, reduced ? { immediate: true } : {});
+    else window.scrollTo({ top: y, behavior: reduced ? "auto" : "smooth" });
+  }
+
   function openSheetFor(s) {
     if (!sheet || !s) return;
     if (sheetShow) sheetShow.textContent = label(s);
+    sheetExtras(s);
     embed(sheetMount, s);
-    if (sheet.open) return;
-    if (window.CLT && CLT.dialogs) CLT.dialogs.open(sheet);
-    else if (sheet.showModal) sheet.showModal();
+    if (!sheet.open) {
+      if (window.CLT && CLT.dialogs) CLT.dialogs.open(sheet);
+      else if (sheet.showModal) sheet.showModal();
+    }
+    updateResume();
   }
 
   if (openSheet && sheet) {
     openSheet.addEventListener("click", function () { openSheetFor(current); });
-    sheet.addEventListener("close", function () { if (sheetMount) sheetMount.textContent = ""; });
+    sheet.addEventListener("close", function () { if (sheetMount) sheetMount.textContent = ""; updateResume(); });
   }
 
   // Desktop ↔ phone switch with a choice made: move the checkout.
@@ -439,10 +581,11 @@
       embed(mount, current);
     }
   }
-  if (phone.addEventListener) phone.addEventListener("change", onMedia);
+  if (phone.addEventListener) phone.addEventListener("change", function () { onMedia(); updateResume(); });
 
   render();
   section.classList.add("is-hydrated");
+  entrance();
 
   // Deep link: ?date=…&time=…
   var q = parseQuery(location.search);
@@ -453,10 +596,14 @@
     if (card) card.classList.add("is-selected");
     if (pick) {
       choose(pick, false);
-      // Wait for the curtain/Lenis before moving the page.
-      setTimeout(function () { if (!phone.matches) scrollToSeats(); }, 1200);
+      // Wait for the curtain/Lenis, then go straight to the checkout.
+      setTimeout(function () { if (phone.matches) openSheetFor(pick); else scrollToSeats(); }, 1300);
     } else if (card) {
-      setTimeout(function () { card.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" }); }, 1200);
+      setTimeout(function () {
+        scrollToEl(card);
+        card.classList.add("is-flash");
+        setTimeout(function () { card.classList.remove("is-flash"); }, 2400);
+      }, 1300);
     }
   }
 })();
