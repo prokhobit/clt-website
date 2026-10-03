@@ -1536,22 +1536,54 @@
         });
         return bottom + 10;
       }
+      // Docking is checked once a frame while Lenis keeps the page moving, so
+      // the nav has already slipped a few px past its mark when it switches to
+      // fixed (and back). Instead of snapping, it glides from where it was
+      // drawn to where it now lives — FLIP on the compositor, no fade.
+      var glideAnim = null;
+      function glide(from, rest) {
+        if (env.reducedMotion || !nav.animate) return;
+        var to = nav.getBoundingClientRect();
+        var dx = from.left - to.left,
+          dy = from.top - to.top;
+        if (glideAnim) glideAnim.cancel();
+        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+        glideAnim = nav.animate(
+          [
+            { transform: rest + " translate(" + dx + "px, " + dy + "px)" },
+            { transform: rest },
+          ],
+          { duration: 360, easing: "cubic-bezier(0.32, 0.72, 0, 1)" },
+        );
+      }
       function dock(on, offset) {
         if (on === docked) return;
         docked = on;
+        var from = nav.getBoundingClientRect();
+        if (glideAnim) glideAnim.cancel();
         if (on) {
           var cs = getComputedStyle(nav);
           spacer = spacer || document.createElement("div");
           spacer.className = "clt-jumpnav-spacer";
           spacer.setAttribute("aria-hidden", "true");
-          spacer.style.height = nav.offsetHeight + "px";
-          spacer.style.marginTop = cs.marginTop;
-          spacer.style.marginBottom = cs.marginBottom;
+          // Hold exactly the box the nav leaves behind. It is inline-flex on a
+          // line of its own in the hero, so a block spacer would drop the
+          // line's descender room and nudge everything below by a few px.
+          spacer.style.display = /inline/.test(cs.display) ? "inline-block" : "block";
+          spacer.style.verticalAlign = cs.verticalAlign;
+          spacer.style.width = from.width + "px";
+          spacer.style.height = from.height + "px";
+          spacer.style.margin = cs.marginTop + " " + cs.marginRight + " " + cs.marginBottom + " " + cs.marginLeft;
           home = nav.parentNode;
           homeNext = nav.nextSibling;
+          var homeH = home.getBoundingClientRect().height;
           home.insertBefore(spacer, nav);
           nav.style.setProperty("--clt-jumpnav-top", offset + "px");
           document.body.appendChild(nav);
+          // An empty inline box sits on the baseline differently from the
+          // nav's own line of text — correct by whatever the parent changed.
+          var drift = homeH - home.getBoundingClientRect().height;
+          if (Math.abs(drift) > 0.1) spacer.style.height = from.height + drift + "px";
           nav.classList.add("is-docked");
           // A docked nav is always shown. If a reveal ([data-clt-reveal] on
           // the nav) hadn't played yet — page reloaded mid-scroll, or opened
@@ -1567,9 +1599,11 @@
           if (home) home.insertBefore(nav, spacer && spacer.parentNode === home ? spacer : homeNext);
           if (spacer && spacer.parentNode) spacer.parentNode.removeChild(spacer);
         }
+        glide(from, on ? "translate(-50%)" : "translate(0)");
         revealCurrent();
       }
       var dockMq = window.matchMedia("(min-width: 62rem)");
+      var lastTop = -1;
       function checkDock() {
         if (!canDock) return;
         if (!dockMq.matches) { // phones and tablets: the nav scrolls away with its section
@@ -1579,7 +1613,11 @@
         var offset = dockOffset();
         var anchor = docked ? spacer : nav;
         var shouldDock = anchor.getBoundingClientRect().top < offset;
-        if (docked && shouldDock) nav.style.setProperty("--clt-jumpnav-top", offset + "px");
+        if (docked && shouldDock && Math.abs(offset - lastTop) > 0.5) {
+          lastTop = offset;
+          nav.style.setProperty("--clt-jumpnav-top", offset + "px");
+        }
+        if (!docked && shouldDock) lastTop = offset;
         dock(shouldDock, offset);
       }
 
@@ -2111,8 +2149,10 @@
   // Every page but Home (and Schools, which stages its own video hero): the
   // first .clt-page-hero plays the Schools entrance once the curtain opens —
   // eyebrow letters, then title words, rise out of a blur; lede, buttons and
-  // jump-nav follow — and a large hero picture ([data-clt-hero-media], or the
-  // About / YAP media) settles in from a soft zoom. Scrolling the hero away
+  // jump-nav follow. A large hero picture ([data-clt-hero-media], or the
+  // About / YAP media) placed directly in the hero becomes its stage: the copy
+  // overlays it (clt-master.css) and it comes up first, the photo settling
+  // from a soft zoom; elsewhere in the hero it settles in on its own. Scrolling the hero away
   // blurs and fades each part as it leaves the top of the screen (scrubbed,
   // so scrolling back focuses it again). Touch screens get the same motion
   // without blur filters. data-clt-hero-stage="off" on the hero opts out.
@@ -2172,13 +2212,28 @@
     var copy = [eyebrow, title, lede, actionsBox].filter(Boolean);
     var hidden = copy.concat(jump ? [jump] : []);
     gsap.set(hidden, { autoAlpha: 0 });
+    // A picture that is a direct child of the hero is its stage: clt-master.css
+    // lays the copy over it (the Schools video hero), so it comes up first —
+    // the frame fades in while the photo inside settles from a soft zoom —
+    // and the copy focuses in over it.
+    var staged = !!(media && media.parentNode === hero);
+    var shot = staged ? $("img, video", media) : null;
     var mediaNow = media && media.getBoundingClientRect().top < window.innerHeight;
-    if (media) gsap.set(media, { autoAlpha: 0, scale: 1.06, filter: blur(16), transformOrigin: "50% 40%" });
+    if (staged) {
+      gsap.set(media, { autoAlpha: 0 });
+      if (shot) gsap.set(shot, { scale: 1.12, filter: blur(12), transformOrigin: "50% 50%" });
+    } else if (media) {
+      gsap.set(media, { autoAlpha: 0, scale: 1.06, filter: blur(16), transformOrigin: "50% 40%" });
+    }
 
     // Each part blurs away as it leaves the top of the screen. Built once its
     // entrance is done, so the scrubbed tween never fights the entrance.
-    function leave(el, px, floor, start) {
+    // Starts when the element's top crosses `line` (share of the viewport),
+    // but never before the page has scrolled — on a phone the eyebrow already
+    // sits above the 14% line at rest and would start out blurred.
+    function leave(el, px, floor, line) {
       if (!ST || !el) return;
+      var at = line == null ? 0.14 : line;
       gsap.fromTo(
         el,
         { autoAlpha: 1, filter: blur(0), y: 0 },
@@ -2190,13 +2245,31 @@
           immediateRender: false,
           scrollTrigger: {
             trigger: el,
-            start: start || "top 14%",
+            start: function () {
+              var top = el.getBoundingClientRect().top + window.scrollY;
+              return Math.max(1, top - window.innerHeight * at);
+            },
             end: "bottom top",
             scrub: 0.6,
             invalidateOnRefresh: true,
           },
         },
       );
+    }
+
+    function stageIn() {
+      gsap.to(media, { autoAlpha: 1, duration: 1.1, ease: "power2.out", clearProps: "opacity,visibility" });
+      if (shot)
+        gsap.to(shot, {
+          scale: 1,
+          filter: blur(0),
+          duration: 1.9,
+          ease: settle,
+          clearProps: "filter,transform",
+        });
+      gsap.delayedCall(1.9, function () {
+        leave(media, 14, 0.15, 0);
+      });
     }
 
     function mediaIn(delay) {
@@ -2209,7 +2282,7 @@
         ease: settle,
         onComplete: function () {
           gsap.set(media, { clearProps: "filter,transform,willChange" });
-          leave(media, 14, 0.2, "top 10%");
+          leave(media, 14, 0.2, 0.1);
         },
       });
     }
@@ -2243,19 +2316,21 @@
           if (typeof CLT.refresh === "function") CLT.refresh();
         },
       });
-      tl.set([eyebrow, title].filter(Boolean), { autoAlpha: 1 }, 0);
+      var t = staged ? 0.7 : 0; // over a stage, the copy waits for the picture
+      tl.set([eyebrow, title].filter(Boolean), { autoAlpha: 1 }, t);
       if (chars.length)
-        tl.fromTo(chars, rise, { autoAlpha: 1, filter: blur(0), yPercent: 0, duration: 0.9, stagger: 0.022 }, 0);
+        tl.fromTo(chars, rise, { autoAlpha: 1, filter: blur(0), yPercent: 0, duration: 0.9, stagger: 0.022 }, t);
       if (words.length)
-        tl.fromTo(words, rise, { autoAlpha: 1, filter: blur(0), yPercent: 0, duration: 1.25, stagger: 0.07 }, 0.2);
+        tl.fromTo(words, rise, { autoAlpha: 1, filter: blur(0), yPercent: 0, duration: 1.25, stagger: 0.07 }, t + 0.2);
       if (lede)
-        tl.fromTo(lede, { autoAlpha: 0, filter: blur(10), y: 14 }, { autoAlpha: 1, filter: blur(0), y: 0, duration: 1.1 }, 0.65);
+        tl.fromTo(lede, { autoAlpha: 0, filter: blur(10), y: 14 }, { autoAlpha: 1, filter: blur(0), y: 0, duration: 1.1 }, t + 0.65);
       if (actionsBox) {
-        tl.set(actionsBox, { autoAlpha: 1 }, 0.85);
-        tl.fromTo(actions, { autoAlpha: 0, y: 16 }, { autoAlpha: 1, y: 0, duration: 0.8, stagger: 0.08, clearProps: "transform,opacity,visibility" }, 0.85);
+        tl.set(actionsBox, { autoAlpha: 1 }, t + 0.85);
+        tl.fromTo(actions, { autoAlpha: 0, y: 16 }, { autoAlpha: 1, y: 0, duration: 0.8, stagger: 0.08, clearProps: "transform,opacity,visibility" }, t + 0.85);
       }
-      if (jump) tl.to(jump, { autoAlpha: 1, duration: 0.9, ease: "power2.out" }, 1);
-      if (media) {
+      if (jump) tl.to(jump, { autoAlpha: 1, duration: 0.9, ease: "power2.out" }, t + 1);
+      if (staged) stageIn();
+      else if (media) {
         if (mediaNow) mediaIn(0.35);
         else if (ST)
           ST.create({ trigger: media, start: "top 92%", once: true, onEnter: function () { mediaIn(0); } });
@@ -2275,7 +2350,7 @@
         try {
           play();
         } catch (e) {
-          gsap.set(hidden.concat(media ? [media] : []), { clearProps: "opacity,visibility,filter,transform" });
+          gsap.set(hidden.concat(media ? [media] : [], shot ? [shot] : []), { clearProps: "opacity,visibility,filter,transform" });
           console.warn("[CLT] hero stage failed", e);
         }
       };

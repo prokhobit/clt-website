@@ -806,6 +806,99 @@ kbd {
   z-index: -1;
 }
 
+/* Hero with a picture stage (About, YAP; any [data-clt-hero-media] placed
+   directly in .clt-page-hero): the copy overlays the framed photo like the
+   Schools video hero — scrim for legibility, a candle spot from above.
+   clt-core brings the photo up first and focuses the copy in over it. */
+.clt-page-hero:has(> :is([data-clt-hero-media], [data-au-hero-media], [data-yap-hero-media])) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  padding: clamp(6.75rem, 12vh, 8rem) 0 clamp(1.5rem, 4vh, 3rem);
+}
+
+@media (max-width: 991px) {
+  .clt-page-hero:has(> :is([data-clt-hero-media], [data-au-hero-media], [data-yap-hero-media])) {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+}
+
+.clt-page-hero:has(> :is([data-clt-hero-media], [data-au-hero-media], [data-yap-hero-media])) > * {
+  grid-area: 1 / 1;
+}
+
+.clt-page-hero > :is([data-clt-hero-media], [data-au-hero-media], [data-yap-hero-media]) {
+  position: relative;
+  z-index: 0;
+  min-height: clamp(36rem, 84svh, 56rem);
+  margin: 0;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: var(--r-card);
+  border: 1px solid var(--line);
+  background: var(--clt-void);
+  box-shadow: var(--shadow-raise);
+  transform: translateZ(0);
+}
+
+.clt-page-hero > :is([data-clt-hero-media], [data-au-hero-media], [data-yap-hero-media]) > :is(img, video, .clt-media-ph) {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: auto;
+  object-fit: cover;
+  object-position: 50% 42%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  scale: 1;
+  filter: none;
+}
+
+.clt-page-hero > :is([data-clt-hero-media], [data-au-hero-media], [data-yap-hero-media])::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 1;
+  background: radial-gradient(ellipse 62% 48% at 50% 52%, rgb(6 5 8 / 0.7), rgb(6 5 8 / 0.34) 55%, transparent 80%), linear-gradient(180deg, rgb(6 5 8 / 0.55) 0%, rgb(6 5 8 / 0.26) 24%, rgb(6 5 8 / 0.5) 55%, rgb(6 5 8 / 0.92) 100%), radial-gradient(ellipse 80% 70% at 50% 45%, transparent 40%, rgb(6 5 8 / 0.55) 100%);
+}
+
+.clt-page-hero > :is([data-clt-hero-media], [data-au-hero-media], [data-yap-hero-media])::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: radial-gradient(ellipse 46% 60% at 50% 0%, color-mix(in srgb, var(--clt-candle-rgb) 22%, transparent), transparent 70%);
+}
+
+.clt-page-hero:has(> :is([data-clt-hero-media], [data-au-hero-media], [data-yap-hero-media])) > :not([data-clt-hero-media], [data-au-hero-media], [data-yap-hero-media]) {
+  position: relative;
+  z-index: 4;
+  min-width: 0;
+  align-self: center;
+  padding: clamp(3rem, 8vh, 5.5rem) clamp(1.25rem, 5vw, 4rem);
+}
+
+.clt-page-hero:has(> :is([data-clt-hero-media], [data-au-hero-media], [data-yap-hero-media])) .clt-page-hero__title {
+  text-shadow: 0 4px 30px rgb(0 0 0 / 0.55);
+}
+
+.clt-page-hero:has(> :is([data-clt-hero-media], [data-au-hero-media], [data-yap-hero-media])) .clt-page-hero__lede {
+  color: var(--clt-linen-200);
+  text-shadow: 0 2px 12px rgb(0 0 0 / 0.7);
+}
+
+@media (max-width: 47.5rem) {
+  .clt-page-hero > :is([data-clt-hero-media], [data-au-hero-media], [data-yap-hero-media]) {
+    min-height: clamp(34rem, 86svh, 46rem);
+  }
+}
+
 .clt-page-hero__title {
   font-family: var(--font-display);
   font-weight: 500;
@@ -6950,7 +7043,7 @@ a.clt-icon-disc:hover svg,
 }
 
 @media (min-width:992px) {
-  .clt-mainnav.is-scrolled .clt-mainnav__bar {
+  html .clt-mainnav.is-scrolled .clt-mainnav__bar {
     background-color: rgba(10,9,11,.72);
     box-shadow: inset 0 1px 0 rgba(255,244,218,.18),0 18px 44px rgba(0,0,0,.5);
   }
@@ -7081,9 +7174,11 @@ a.clt-icon-disc:hover svg,
   }
 }
 
+/* "html" lifts these over the design-system embed on each page, which loads
+   after this file with the old 50%-see-through scrolled shell. */
 @media (prefers-reduced-transparency:reduce) {
-  .clt-mainnav__bar,
-  .clt-mainnav.is-scrolled .clt-mainnav__bar {
+  html .clt-mainnav__bar,
+  html .clt-mainnav.is-scrolled .clt-mainnav__bar {
     background: #171419;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
@@ -7269,8 +7364,11 @@ a.clt-icon-disc:hover svg,
   display: none;
 }
 
-.clt-jumpnav.is-docked {
-  animation: clt-jumpnav-dock .42s cubic-bezier(.32,.72,0,1) both;
+/* Docking: clt-core glides the nav from where it was drawn (FLIP), so no
+   keyframe — the old fade-and-drop restarted from opacity 0 on every dock.
+   "html" beats the same rule in the design-system embed. */
+html .clt-jumpnav.is-docked {
+  animation: none;
 }
 
 @keyframes clt-jumpnav-dock {
