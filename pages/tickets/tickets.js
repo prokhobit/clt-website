@@ -591,7 +591,10 @@
   var q = parseQuery(location.search);
   if (q.date) {
     var onDate = shows.filter(function (s) { return s.ymd === q.date && bookable(s); });
-    var pick = onDate.filter(function (s) { return q.time && s.tslug === q.time; })[0] || (onDate.length === 1 ? onDate[0] : null);
+    // A link to a time that no longer exists (e.g. a cancelled showtime) lands on
+    // its date instead of opening a different time without saying so.
+    var pick = onDate.filter(function (s) { return q.time && s.tslug === q.time; })[0] ||
+      (!q.time && onDate.length === 1 ? onDate[0] : null);
     var card = picker.querySelector('.tk-date[data-ymd="' + q.date + '"]');
     if (card) card.classList.add("is-selected");
     if (pick) {
